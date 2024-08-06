@@ -7,7 +7,7 @@ with open("requirements.txt") as f:
 
 setuptools.setup(
     name="eosapi-async",
-    version="1.0.0",
+    version="1.0.1",
     author="encoderlee",
     author_email="encoderlee@gmail.com",
     description="a simple, high-level and lightweight eosio sdk write by python with async support",
