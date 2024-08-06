@@ -16,27 +16,28 @@ def main():
     print("transfer EOS token from [consumer1111] to [consumer2222] by eospy")
     print("but let [payer2222222] pay for CPU/NET resources of this transaction")
     trx = {
-        "actions": [{
-            "account": "eosio.token",
-            "name": "transfer",
-            "authorization": [
-                {
-                    "actor": account_name,
-                    "permission": "active",
+        "actions": [
+            {
+                "account": "eosio.token",
+                "name": "transfer",
+                "authorization": [
+                    {
+                        "actor": account_name,
+                        "permission": "active",
+                    },
+                ],
+                "data": {
+                    "from": account_name,
+                    "to": "consumer2222",
+                    "quantity": "0.0001 EOS",
+                    "memo": "by eosapi",
                 },
-            ],
-            "data": {
-                "from": account_name,
-                "to": "consumer2222",
-                "quantity": "0.0001 EOS",
-                "memo": "by eosapi",
-            },
-        }]
+            }
+        ]
     }
     resp = api.push_transaction(trx)
     print("transaction ok: {0}".format(resp))
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
