@@ -4,9 +4,10 @@ import functools
 from typing import List, Dict, Union
 from .exceptions import TransactionException, NodeException
 
+
 class EosApi:
 
-    def __init__(self, rpc_host: str = "https://wax.pink.gg", timeout = 120):
+    def __init__(self, rpc_host: str = "https://wax.pink.gg", timeout=120):
         self.rpc_host = rpc_host
         self.accounts: Dict[str, Account] = {}
         self.cpu_payer: Account = None
@@ -14,7 +15,6 @@ class EosApi:
         self.session.trust_env = False
         self.session.headers["User-Agent"] = "Mozilla/5.0"
         self.session.request = functools.partial(self.session.request, timeout=timeout)
-
 
     def import_key(self, account: str, private_key: str, permission: str = "active"):
         account = Account(account, private_key, permission)
@@ -37,7 +37,7 @@ class EosApi:
         self.cpu_payer = None
 
     def post(self, url: str, post_data: Dict = None) -> requests.Response:
-        resp = self.session.post(url, json = post_data)
+        resp = self.session.post(url, json=post_data)
 
         if resp.status_code == 500:
             raise TransactionException("transaction error: {0}".format(resp.text), resp)

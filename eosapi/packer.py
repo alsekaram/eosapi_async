@@ -8,6 +8,7 @@ import hashlib
 from cryptos import hash_to_int, encode_privkey, decode, encode, \
     hmac, fast_multiply, G, inv, N, decode_privkey, get_privkey_format
 
+
 class EosType:
     size: int = None
     fmt: str = None
@@ -178,9 +179,9 @@ def char_to_symbol(c):
 def endian_reverse_u32(x):
     x = x & 0xFFFFFFFF
     return ((x >> 0x18) & 0xFF) \
-           | (((x >> 0x10) & 0xFF) << 0x08) \
-           | (((x >> 0x08) & 0xFF) << 0x10) \
-           | (((x) & 0xFF) << 0x18)
+        | (((x >> 0x10) & 0xFF) << 0x08) \
+        | (((x >> 0x08) & 0xFF) << 0x10) \
+        | (((x) & 0xFF) << 0x18)
 
 
 def get_tapos_info(block_id):
@@ -223,9 +224,9 @@ def ecdsa_raw_sign_nonce(msghash, priv, nonce):
 # like https://github.com/EOSIO/eosjs-ecc/commit/09c823ac4c4fb4f7257d8ed2df45a34215a8c537#diff-e8c843fd1f732a963ec41decb2e69133R241
 def is_canonical(c):
     return not (c[1] & 0x80) \
-           and not (c[1] == 0 and not (c[2] & 0x80)) \
-           and not (c[33] & 0x80) \
-           and not (c[33] == 0 and not (c[34] & 0x80))
+        and not (c[1] == 0 and not (c[2] & 0x80)) \
+        and not (c[33] & 0x80) \
+        and not (c[33] == 0 and not (c[34] & 0x80))
 
 
 def ripmed160(data):

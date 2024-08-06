@@ -5,6 +5,7 @@ import hashlib
 from base58 import b58encode
 import json
 
+
 @dataclass
 class Account:
     account: str
@@ -13,6 +14,7 @@ class Account:
 
     def index(self):
         return "{0}-{1}".format(self.account, self.permission)
+
 
 @dataclass
 class Authorization:
@@ -86,12 +88,12 @@ class Transaction:
     ref_block_prefix: int = None
     expiration: datetime.datetime = None
 
-    signatures: List[str] = field(default_factory = list)
+    signatures: List[str] = field(default_factory=list)
 
     def link(self, block_id: int, chain_id: int):
         self.chain_id = chain_id
         self.ref_block_num, self.ref_block_prefix = get_tapos_info(block_id)
-        self.expiration = datetime.datetime.utcnow() + datetime.timedelta(seconds = self.expiration_delay_sec)
+        self.expiration = datetime.datetime.utcnow() + datetime.timedelta(seconds=self.expiration_delay_sec)
 
     def pack(self) -> bytes:
         mbytes = b""
