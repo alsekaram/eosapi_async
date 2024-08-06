@@ -6,7 +6,7 @@ with open("requirements.txt") as f:
     requirements = [req for req in f.read().splitlines() if req]
 
 setuptools.setup(
-    name="eosapi_async",
+    name="eosapi-async",
     version="1.0.0",
     author="encoderlee",
     author_email="encoderlee@gmail.com",

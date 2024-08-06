@@ -15,7 +15,7 @@ eosapi is a python library to interact with EOSIO blockchains.
 its main focus are bot applications on the blockchain.
 
 # Install
-```$ pip install eosapi_async```
+```$ pip install eosapi-async```
 
 # Using
 ```python
