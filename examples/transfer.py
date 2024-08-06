@@ -2,30 +2,33 @@ from eosapi import EosApi, NodeException, TransactionException
 from requests import RequestException
 
 account_name = "consumer1111"
-private_key = "5KWxgG4rPEXzHnRBaiVRCCE6WAfnqkRpTu1uHzJoQRzixqBB1k3"
+private_key = "You_key_here"
 
 api = EosApi(rpc_host="https://jungle3.greymass.com", timeout=60)
 api.import_key(account_name, private_key)
 
+
 def main():
     print("transfer EOS token from [consumer1111] to [consumer2222] by eosapi")
     trx = {
-        "actions": [{
-            "account": "eosio.token",
-            "name": "transfer",
-            "authorization": [
-                {
-                    "actor": account_name,
-                    "permission": "active",
+        "actions": [
+            {
+                "account": "eosio.token",
+                "name": "transfer",
+                "authorization": [
+                    {
+                        "actor": account_name,
+                        "permission": "active",
+                    },
+                ],
+                "data": {
+                    "from": account_name,
+                    "to": "consumer2222",
+                    "quantity": "0.0001 EOS",
+                    "memo": "by eosapi",
                 },
-            ],
-            "data": {
-                "from": account_name,
-                "to": "consumer2222",
-                "quantity": "0.0001 EOS",
-                "memo": "by eosapi",
-            },
-        }]
+            }
+        ]
     }
     try:
         resp = api.push_transaction(trx)
@@ -33,9 +36,17 @@ def main():
     except RequestException as e:
         print("network error: {0}".format(str(e)))
     except NodeException as e:
-        print("eos node error, http status code {0}, response text: {1}".format(e.resp.status_code, e.resp.text))
+        print(
+            "eos node error, http status code {0}, response text: {1}".format(
+                e.resp.status_code, e.resp.text
+            )
+        )
     except TransactionException as e:
-        print("eos transaction error, http status code {0}, response text: {1}".format(e.resp.status_code, e.resp.text))
+        print(
+            "eos transaction error, http status code {0}, response text: {1}".format(
+                e.resp.status_code, e.resp.text
+            )
+        )
 
 
 def advance():
@@ -53,5 +64,5 @@ def advance():
     api.session.headers["User-Agent"] = "Mozilla/5.0"
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

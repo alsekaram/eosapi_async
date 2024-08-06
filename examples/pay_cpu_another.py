@@ -3,9 +3,9 @@
 from eosapi import EosApi
 
 account_name = "consumer1111"
-private_key = "5KWxgG4rPEXzHnRBaiVRCCE6WAfnqkRpTu1uHzJoQRzixqBB1k3"
+private_key = "You_key_here"
 payer_name = "payer2222222"
-payer_private_key = "5KAskRRbqYVCRhZxLXqeg9yvWYQQHifDtf7BPceZUDw6zybjaQh"
+payer_private_key = "Payer_key_here"
 
 api = EosApi(rpc_host="https://jungle3.greymass.com")
 api.import_key(account_name, private_key)

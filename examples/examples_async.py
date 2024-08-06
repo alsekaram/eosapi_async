@@ -3,7 +3,7 @@ from eosapi import EosApi
 
 
 account_name = "consumer1111"
-private_key = "5KWxgG4rPEXzHnRBaiVRCCE6WAfnqkRpTu1uHzJoQRzixqBB1k3"
+private_key = "You_key_here"
 
 
 async def main() -> None:
