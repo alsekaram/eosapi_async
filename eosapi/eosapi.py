@@ -98,7 +98,6 @@ class EosApi:
         :param post_data: The data to post.
         :return: The response from the request.
         """
-        print(f"SYNC {post_data=}")
         resp = self.session.post(url, json=post_data)
 
         if resp.status_code == 500:
@@ -119,7 +118,6 @@ class EosApi:
         :param post_data: The data to post.
         :return: The response data as a dictionary.
         """
-        print(f"ASYNC {post_data=}")
         async with aiohttp.ClientSession() as session:
             async with session.post(url, json=post_data, headers=self.headers) as resp:
                 if resp.status >= 203:
@@ -226,7 +224,6 @@ class EosApi:
         :return: A dictionary with the result of the transaction.
         """
         url = self._build_url("push_transaction")
-        print(url)
         post_data = {
             "signatures": trx.signatures,
             "compression": compression,
