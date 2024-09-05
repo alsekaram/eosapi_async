@@ -59,7 +59,7 @@ class EosApi:
             "priority": "u=4",
             "te": "trailers",
         }
-        if 'yeomen' in self.rpc_host:
+        if "yeomen" in self.rpc_host:
             self.headers = self.warder_headers
         self.session = requests.Session()
         self.session.trust_env = False
