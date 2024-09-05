@@ -5,6 +5,8 @@ from typing import List, Dict, Union
 from .transaction import Account, Authorization, Action, Transaction
 from .exceptions import TransactionException, NodeException
 
+from antelopy import AbiCache
+
 
 class EosApi:
     """
@@ -21,6 +23,12 @@ class EosApi:
         self.rpc_host = rpc_host
         self.accounts: Dict[str, Account] = {}
         self.cpu_payer: Account | None = None
+
+        self.abi_cache = AbiCache(
+            chain_endpoint=rpc_host,
+            chain_package="aioeos",
+        )
+
         self.headers = {
             "accept": "*/*",
             "accept-language": "en-US;q=0.5,en;q=0.3",
@@ -158,13 +166,17 @@ class EosApi:
         :param args: The arguments for the action.
         :return: The binary arguments.
         """
-        url = self._build_url("abi_json_to_bin")
-        post_data = {"code": code, "action": action, "args": args}
-        resp_json = await self._post_async(url, post_data)
-        binargs = resp_json.get("binargs")
+        self.abi_cache.read_abi(code)
+        binargs = self.abi_cache.serialize_data(
+            code,
+            action,
+            args,
+        )
+        print(f"{binargs=}")
+
         if binargs is None:
             raise NodeException("EOS node error, 'binargs' not found", None)
-        return bytes.fromhex(binargs)
+        return binargs
 
     def get_info(self) -> Dict:
         """
