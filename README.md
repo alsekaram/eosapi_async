@@ -1,10 +1,10 @@
 # eosapi
-![version](https://img.shields.io/badge/version-1.0.3-blue)
+![version](https://img.shields.io/badge/version-1.0.4-blue)
 ![license](https://img.shields.io/badge/license-MIT-brightgreen)
 ![python_version](https://img.shields.io/badge/python-%3E%3D%203.7-brightgreen)
 ![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
 [![](https://img.shields.io/badge/blog-@encoderlee-red)](https://encoderlee.blog.csdn.net)
-[![](https://img.shields.io/badge/github-@i--am--Vasya-red)](https://github.com/alsekaram)
+[![](https://img.shields.io/badge/github-@alsekaram-red)](https://github.com/alsekaram)
 
 A simple, high-level and lightweight eosio sdk write by python
 with async features developed by alsekaram.
