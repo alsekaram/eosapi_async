@@ -174,12 +174,12 @@ class EosApi:
             post_data = {"account_name": code}
             resp_json = await self._post_async(url, post_data)
             abi = Abi(code, **resp_json.get("abi"))
+            self._abi_cache[code] = abi
         else:
             abi = self._abi_cache.get(code)
 
         actions = abi.get_action(action)
-        binargs = binascii.hexlify(abi.serialize(actions, args))
-        print(f"{binargs=}")
+        binargs = abi.serialize(actions, args)
 
         if binargs is None:
             raise NodeException("EOS node error, 'binargs' not found", None)
