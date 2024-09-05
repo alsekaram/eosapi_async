@@ -1,11 +1,17 @@
+import binascii
+from collections import defaultdict
+
 import aiohttp
 import requests
 import functools
 from typing import List, Dict, Union
+
+from antelopy import AbiCache
+
 from .transaction import Account, Authorization, Action, Transaction
 from .exceptions import TransactionException, NodeException
 
-from antelopy import AbiCache
+from .abi import Abi
 
 
 class EosApi:
@@ -23,11 +29,7 @@ class EosApi:
         self.rpc_host = rpc_host
         self.accounts: Dict[str, Account] = {}
         self.cpu_payer: Account | None = None
-
-        self.abi_cache = AbiCache(
-            chain_endpoint=rpc_host,
-            chain_package="aioeos",
-        )
+        self._abi_cache: defaultdict[str, Abi] = defaultdict()
 
         self.headers = {
             "accept": "*/*",
@@ -166,12 +168,17 @@ class EosApi:
         :param args: The arguments for the action.
         :return: The binary arguments.
         """
-        self.abi_cache.read_abi(code)
-        binargs = self.abi_cache.serialize_data(
-            code,
-            action,
-            args,
-        )
+
+        if self._abi_cache.get(code) is None:
+            url = self._build_url("get_abi")
+            post_data = {"account_name": code}
+            resp_json = await self._post_async(url, post_data)
+            abi = Abi(code, **resp_json.get("abi"))
+        else:
+            abi = self._abi_cache.get(code)
+
+        actions = abi.get_action(action)
+        binargs = binascii.hexlify(abi.serialize(actions, args))
         print(f"{binargs=}")
 
         if binargs is None:
