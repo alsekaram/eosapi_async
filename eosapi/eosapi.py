@@ -44,6 +44,23 @@ class EosApi:
             "sec-fetch-mode": "cors",
             "sec-fetch-site": "cross-site",
         }
+        self.warder_headers = {
+            "accept": "*/*",
+            "accept-language": "en-US;q=0.5,en;q=0.3",
+            "referer": "https://play.alienworlds.io/",
+            "accept-encoding": "gzip, deflate",
+            "content-type": "text/plain;charset=UTF-8",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:128.0) Gecko/20100101 Firefox/128.0",
+            "origin": "https://play.alienworlds.io",
+            "dnt": "1",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "priority": "u=4",
+            "te": "trailers",
+        }
+        if 'yeomen' in self.rpc_host:
+            self.headers = self.warder_headers
         self.session = requests.Session()
         self.session.trust_env = False
         self.session.headers = self.headers
