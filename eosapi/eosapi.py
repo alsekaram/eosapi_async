@@ -125,7 +125,7 @@ class EosApi:
         :param post_data: The data to post.
         :return: The response from the request.
         """
-        resp = self.session.post(url, json=post_data)
+        resp = self.session.post(url, json=post_data, headers=self.headers)
 
         if resp.status_code == 500:
             raise TransactionException(f"Transaction error: {resp.text}", resp)
@@ -168,13 +168,21 @@ class EosApi:
         :param args: The arguments for the action.
         :return: The binary arguments.
         """
-        url = self._build_url("abi_json_to_bin")
-        post_data = {"code": code, "action": action, "args": args}
-        resp = self._post(url, post_data)
-        binargs = resp.json().get("binargs")
+        if self._abi_cache.get(code) is None:
+            url = self._build_url("get_abi")
+            post_data = {"account_name": code}
+            resp_json = self._post(url, post_data).json()
+            abi = Abi(code, **resp_json.get("abi"))
+            self._abi_cache[code] = abi
+        else:
+            abi = self._abi_cache.get(code)
+
+        actions = abi.get_action(action)
+        binargs = abi.serialize(actions, args)
+
         if binargs is None:
-            raise NodeException("EOS node error, 'binargs' not found", resp)
-        return bytes.fromhex(binargs)
+            raise NodeException("EOS node error, 'binargs' not found", None)
+        return binargs
 
     async def abi_json_to_bin_async(self, code: str, action: str, args: Dict) -> bytes:
         """
