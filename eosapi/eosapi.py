@@ -12,6 +12,7 @@ from .transaction import Account, Authorization, Action, Transaction
 from .exceptions import TransactionException, NodeException
 
 from .abi import Abi
+from .proxy import Proxy
 
 
 class EosApi:
@@ -19,7 +20,13 @@ class EosApi:
     A class to interact with the EOS blockchain via the EOSIO API.
     """
 
-    def __init__(self, rpc_host: str = "https://wax.pink.gg", timeout: int = 120):
+    def __init__(
+        self,
+        rpc_host: str = "https://wax.pink.gg",
+        timeout: int = 120,
+        proxy: tuple[str, int, int] | None = None,
+        yeomen_proxy: tuple[str, int, int] | None = None,
+    ):
         """
         Initialize the EosApi instance.
 
@@ -30,6 +37,16 @@ class EosApi:
         self.accounts: Dict[str, Account] = {}
         self.cpu_payer: Account | None = None
         self._abi_cache: defaultdict[str, Abi] = defaultdict()
+
+        self.proxy = False
+        self.yeomen_proxy = False
+        if proxy:
+            self.proxy = True
+            self.proxy_service = Proxy(
+                proxy[0],
+                proxy[1],
+                proxy[2],
+            )
 
         self.headers = {
             "accept": "*/*",
@@ -61,6 +78,13 @@ class EosApi:
         }
         if "yeomen" in self.rpc_host:
             self.headers = self.warder_headers
+            if yeomen_proxy:
+                self.yeomen_proxy = True
+                self.yeomen_proxy_service = Proxy(
+                    yeomen_proxy[0],
+                    yeomen_proxy[1],
+                    yeomen_proxy[2],
+                )
         self.session = requests.Session()
         self.session.trust_env = False
         self.session.headers = self.headers
@@ -125,7 +149,12 @@ class EosApi:
         :param post_data: The data to post.
         :return: The response from the request.
         """
-        resp = self.session.post(url, json=post_data, headers=self.headers)
+        resp = self.session.post(
+            url,
+            json=post_data,
+            headers=self.headers,
+            proxies=self.proxy_service.get_random_proxy() if self.proxy else None,
+        )
 
         if resp.status_code == 500:
             raise TransactionException(f"Transaction error: {resp.text}", resp)
@@ -146,7 +175,16 @@ class EosApi:
         :return: The response data as a dictionary.
         """
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=post_data, headers=self.headers) as resp:
+            async with session.post(
+                url,
+                json=post_data,
+                headers=self.headers,
+                proxy=(
+                    self.yeomen_proxy_service.get_random_proxy()
+                    if self.yeomen_proxy
+                    else None
+                ),
+            ) as resp:
                 if resp.status >= 203:
                     if resp.status == 500:
                         raise TransactionException(
