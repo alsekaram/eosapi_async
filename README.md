@@ -1,5 +1,5 @@
 # eosapi
-![version](https://img.shields.io/badge/version-1.2.1-blue)
+![version](https://img.shields.io/badge/version-1.2.2-blue)
 ![license](https://img.shields.io/badge/license-MIT-brightgreen)
 ![python_version](https://img.shields.io/badge/python-%3E%3D%203.7-brightgreen)
 ![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
