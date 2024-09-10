@@ -15,6 +15,6 @@ class NodeException(EosApiException):
 
 
 class TransactionException(EosApiException):
-    def __init__(self, msg, resp: requests.Response | ClientResponse | None):
+    def __init__(self, msg, resp: dict | None):
         super().__init__(msg)
         self.resp = resp

@@ -1,4 +1,5 @@
 import binascii
+import json
 from collections import defaultdict
 
 import aiohttp
@@ -69,7 +70,7 @@ class EosApi:
             "accept": "*/*",
             "accept-language": "en-US;q=0.5,en;q=0.3",
             "referer": "https://waxbloks.io/",
-            "accept-encoding": "gzip, deflate, br",
+            "accept-encoding": "gzip, deflate",
             "content-type": "application/json",
             "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:128.0) Gecko/20100101 Firefox/128.0",
             "origin": "https://waxbloks.io",
@@ -77,10 +78,25 @@ class EosApi:
             "sec-fetch-dest": "empty",
             "sec-fetch-mode": "cors",
             "sec-fetch-site": "cross-site",
+            "priority": "u=4",
+            "te": "trailers",
         }
         if "yeomen" in rpc_host:
-            self.headers["referer"] = "https://play.alienworlds.io/"
-            self.headers["origin"] = "https://play.alienworlds.io"
+            self.headers = {
+                "accept": "*/*",
+                "accept-language": "en-US;q=0.5,en;q=0.3",
+                "referer": "https://play.alienworlds.io/",
+                "accept-encoding": "gzip, deflate",
+                "content-type": "application/json",
+                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:128.0) Gecko/20100101 Firefox/128.0",
+                "origin": "https://play.alienworlds.io",
+                "dnt": "1",
+                "sec-fetch-dest": "empty",
+                "sec-fetch-mode": "cors",
+                "sec-fetch-site": "cross-site",
+                "priority": "u=4",
+                "te": "trailers",
+            }
         self._rpc_host = rpc_host
 
     def import_key(self, account: str, private_key: str, permission: str = "active"):
@@ -173,7 +189,7 @@ class EosApi:
                 json=post_data,
                 headers=self.headers,
                 proxy=(
-                    self.yeomen_proxy_service.get_random_proxy()
+                    self.yeomen_proxy_service.get_sequential_proxy()
                     if self.yeomen_proxy
                     else None
                 ),
@@ -181,9 +197,9 @@ class EosApi:
                 if resp.status >= 203:
                     if resp.status == 500:
                         raise TransactionException(
-                            f"Transaction error: {await resp.json()}", resp
+                            f"Transaction error:", json.loads(await resp.text())
                         )
-
+                    print(await resp.text())
                     raise NodeException(
                         f"EOS node error, bad HTTP status code: {resp.status}",
                         resp,
@@ -319,6 +335,17 @@ class EosApi:
         resp = self._post(url, post_data)
         return resp.json()
 
+    async def get_table_rows_async(self, post_data: Dict) -> Dict:
+        """
+        Retrieve table rows from a smart contract.
+
+        :param post_data: The data to post.
+        :return: A dictionary with the table rows.
+        """
+        url = self._build_url("get_table_rows")
+        resp = await self._post_async(url, post_data)
+        return resp
+
     def _prepare_transaction(
         self, trx: Dict, cpu_usage: int = 1
     ) -> tuple[Transaction, list]:
@@ -411,6 +438,7 @@ class EosApi:
             item.link(binargs)
 
         net_info = await self.get_info_async()
+
         trx.link(net_info["last_irreversible_block_id"], net_info["chain_id"])
 
         signed_keys = []

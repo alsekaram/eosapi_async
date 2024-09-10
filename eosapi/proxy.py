@@ -7,7 +7,15 @@ class Proxy:
         self.ip = f"http://{ip}"
         self.port = port
         self.quantity = quantity
+        self.current_index = 0
 
     def get_random_proxy(self):
         proxy_number = randint(self.port, self.port + self.quantity)
-        return f"{self.ip}:{proxy_number}"
+        proxy = f"{self.ip}:{proxy_number}"
+        return proxy
+
+    def get_sequential_proxy(self):
+        proxy_number = self.port + (self.current_index % self.quantity)
+        proxy = f"{self.ip}:{proxy_number}"
+        self.current_index += 1  # увеличиваем индекс для следующего прокси
+        return proxy
