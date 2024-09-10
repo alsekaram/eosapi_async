@@ -17,7 +17,7 @@ its main focus are bot applications on the blockchain.
 In Antelope's Leap 3.1, the abi_json_to_bin endpoint was deprecated. 
 In version 1.0.3, I modified the asynchronous abi_json_to_bin method to meet the new requirements.
 In version 1.1.2, I modified the synchronous abi_json_to_bin method to meet the new requirements.
-In version 1.2.1 added proxy support
+In version 1.2.1 added proxy support 
 
 
 
