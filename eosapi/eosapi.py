@@ -33,46 +33,47 @@ class EosApi:
 
         :param rpc_host: The RPC host URL for the EOSIO API.
         :param timeout: Timeout for the HTTP requests.
+        :param proxy: Proxy configuration.
+        :param yeomen_proxy: Yeomen proxy configuration.
         """
         self.rpc_host = rpc_host
         self.accounts: Dict[str, Account] = {}
         self.cpu_payer: Account | None = None
         self._abi_cache: defaultdict[str, Abi] = defaultdict()
+        self.proxy_service = self._initialize_proxy_service(proxy)
+        self.yeomen_proxy_service = self._initialize_proxy_service(yeomen_proxy)
+        self.session = self._initialize_session(timeout)
 
-        self.proxy = False
-        self.yeomen_proxy = False
+    @staticmethod
+    def _initialize_proxy_service(proxy: tuple[str, int, int] | None):
         if proxy:
-            self.proxy = True
-            self.proxy_service = Proxy(
-                proxy[0],
-                proxy[1],
-                proxy[2],
-            )
-        if yeomen_proxy:
-            self.yeomen_proxy = True
-            self.yeomen_proxy_service = Proxy(
-                yeomen_proxy[0],
-                yeomen_proxy[1],
-                yeomen_proxy[2],
-            )
-        self.session = requests.Session()
-        self.session.trust_env = False
-        self.session.headers = self.headers
-        self.session.request = functools.partial(self.session.request, timeout=timeout)
+            return Proxy(proxy[0], proxy[1], proxy[2])
+        return None
+
+    def _initialize_session(self, timeout: int) -> requests.Session:
+        session = requests.Session()
+        session.trust_env = False
+        session.headers = self.headers
+        session.request = functools.partial(session.request, timeout=timeout)
+        return session
 
     @property
     def rpc_host(self):
         return self._rpc_host
 
     @rpc_host.setter
-    def rpc_host(self, rpc_host):
+    def rpc_host(self, rpc_host: str):
+        self._update_headers(rpc_host)
+        self._rpc_host = rpc_host
+
+    def _update_headers(self, rpc_host: str):
         self.headers = {
             "accept": "*/*",
             "accept-language": "en-US;q=0.5,en;q=0.3",
             "referer": "https://waxbloks.io/",
             "accept-encoding": "gzip, deflate",
             "content-type": "application/json",
-            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:128.0) Gecko/20100101 Firefox/128.0",
+            "user-agent": "Mozilla/5.0",
             "origin": "https://waxbloks.io",
             "dnt": "1",
             "sec-fetch-dest": "empty",
@@ -82,22 +83,18 @@ class EosApi:
             "te": "trailers",
         }
         if "yeomen" in rpc_host:
-            self.headers = {
-                "accept": "*/*",
-                "accept-language": "en-US;q=0.5,en;q=0.3",
-                "referer": "https://play.alienworlds.io/",
-                "accept-encoding": "gzip, deflate",
-                "content-type": "application/json",
-                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:128.0) Gecko/20100101 Firefox/128.0",
-                "origin": "https://play.alienworlds.io",
-                "dnt": "1",
-                "sec-fetch-dest": "empty",
-                "sec-fetch-mode": "cors",
-                "sec-fetch-site": "cross-site",
-                "priority": "u=4",
-                "te": "trailers",
-            }
-        self._rpc_host = rpc_host
+            self.headers.update(
+                {
+                    "referer": "https://play.alienworlds.io/",
+                    "origin": "https://play.alienworlds.io",
+                }
+            )
+
+    # Helper method to avoid repetition
+    def _create_account(
+        self, account: str, private_key: str, permission: str
+    ) -> Account:
+        return Account(account, private_key, permission)
 
     def import_key(self, account: str, private_key: str, permission: str = "active"):
         """
@@ -107,8 +104,8 @@ class EosApi:
         :param private_key: The private key for the account.
         :param permission: The permission level (default is "active").
         """
-        account = Account(account, private_key, permission)
-        self.accounts[account.index()] = account
+        account_obj = self._create_account(account, private_key, permission)
+        self.accounts[account_obj.index()] = account_obj
 
     def import_keys(self, accounts: Union[List[Dict], List[Account]]):
         """
@@ -118,7 +115,7 @@ class EosApi:
         """
         for item in accounts:
             if isinstance(item, dict):
-                account = Account(
+                account = self._create_account(
                     item["account"], item["private_key"], item["permission"]
                 )
             elif isinstance(item, Account):
@@ -135,7 +132,7 @@ class EosApi:
         :param private_key: The private key for the account.
         :param permission: The permission level (default is "active").
         """
-        self.cpu_payer = Account(account, private_key, permission)
+        self.cpu_payer = self._create_account(account, private_key, permission)
 
     def remove_cpu_payer(self):
         """Remove the CPU payer account."""
@@ -162,7 +159,9 @@ class EosApi:
             url,
             json=post_data,
             headers=self.headers,
-            proxies=self.proxy_service.get_random_proxy() if self.proxy else None,
+            proxies=(
+                self.proxy_service.get_random_proxy() if self.proxy_service else None
+            ),
         )
 
         if resp.status_code == 500:
@@ -190,7 +189,7 @@ class EosApi:
                 headers=self.headers,
                 proxy=(
                     self.yeomen_proxy_service.get_sequential_proxy()
-                    if self.yeomen_proxy
+                    if self.yeomen_proxy_service
                     else None
                 ),
             ) as resp:
@@ -199,7 +198,6 @@ class EosApi:
                         raise TransactionException(
                             f"Transaction error:", json.loads(await resp.text())
                         )
-                    print(await resp.text())
                     raise NodeException(
                         f"EOS node error, bad HTTP status code: {resp.status}",
                         resp,
@@ -215,15 +213,7 @@ class EosApi:
         :param args: The arguments for the action.
         :return: The binary arguments.
         """
-        if self._abi_cache.get(code) is None:
-            url = self._build_url("get_abi")
-            post_data = {"account_name": code}
-            resp_json = self._post(url, post_data).json()
-            abi = Abi(code, **resp_json.get("abi"))
-            self._abi_cache[code] = abi
-        else:
-            abi = self._abi_cache.get(code)
-
+        abi = self._get_or_fetch_abi(code)
         actions = abi.get_action(action)
         binargs = abi.serialize(actions, args)
 
@@ -240,22 +230,31 @@ class EosApi:
         :param args: The arguments for the action.
         :return: The binary arguments.
         """
-
-        if self._abi_cache.get(code) is None:
-            url = self._build_url("get_abi")
-            post_data = {"account_name": code}
-            resp_json = await self._post_async(url, post_data)
-            abi = Abi(code, **resp_json.get("abi"))
-            self._abi_cache[code] = abi
-        else:
-            abi = self._abi_cache.get(code)
-
+        abi = await self._get_or_fetch_abi_async(code)
         actions = abi.get_action(action)
         binargs = abi.serialize(actions, args)
 
         if binargs is None:
             raise NodeException("EOS node error, 'binargs' not found", None)
         return binargs
+
+    def _get_or_fetch_abi(self, code: str):
+        if self._abi_cache.get(code) is None:
+            url = self._build_url("get_abi")
+            post_data = {"account_name": code}
+            resp_json = self._post(url, post_data).json()
+            abi = Abi(code, **resp_json.get("abi"))
+            self._abi_cache[code] = abi
+        return self._abi_cache.get(code)
+
+    async def _get_or_fetch_abi_async(self, code: str):
+        if self._abi_cache.get(code) is None:
+            url = self._build_url("get_abi")
+            post_data = {"account_name": code}
+            resp_json = await self._post_async(url, post_data)
+            abi = Abi(code, **resp_json.get("abi"))
+            self._abi_cache[code] = abi
+        return self._abi_cache.get(code)
 
     def get_info(self) -> Dict:
         """
@@ -368,14 +367,10 @@ class EosApi:
         actors = []
         actions = []
         for item in trx["actions"]:
-            authorization = []
-            for auth in item["authorization"]:
-                authorization.append(
-                    Authorization(actor=auth["actor"], permission=auth["permission"])
-                )
-                actor_permission = f"{auth['actor']}-{auth['permission']}"
-                if actor_permission not in actors:
-                    actors.append(actor_permission)
+            authorization = [
+                Authorization(actor=auth["actor"], permission=auth["permission"])
+                for auth in item["authorization"]
+            ]
             actions.append(
                 Action(
                     account=item["account"],
