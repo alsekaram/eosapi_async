@@ -17,7 +17,7 @@ setuptools.setup(
         non-blocking HTTP requests, especially useful for high-latency operations.
         
         Additional Asynchronous part developed by [alsekaram](https://github.com/alsekaram), you can find him on  
-        GitHub or email [github@awl.su](mailto:github@awl.su).
+        GitHub or email [git@awl.su](mailto:git@awl.su).
         """,
     long_description_content_type="text/markdown",
     url="https://github.com/alsekaram/eosapi_async",
