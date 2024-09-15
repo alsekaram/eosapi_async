@@ -16,11 +16,11 @@ setuptools.setup(
         `push_transaction` methods using aiohttp. This update enhances performance by allowing 
         non-blocking HTTP requests, especially useful for high-latency operations.
         
-        Additional Asynchronous part developed by [i-am-Vasya](https://github.com/i-am-Vasya), you can find him on  
+        Additional Asynchronous part developed by [alsekaram](https://github.com/alsekaram), you can find him on  
         GitHub or email [github@awl.su](mailto:github@awl.su).
         """,
     long_description_content_type="text/markdown",
-    url="https://github.com/i-am-Vasya/eosapi_async",
+    url="https://github.com/alsekaram/eosapi_async",
     packages=find_packages(),
     install_requires=requirements,
     license="MIT",
