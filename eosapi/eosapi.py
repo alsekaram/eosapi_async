@@ -1,13 +1,11 @@
-import binascii
 import json
+from cachetools import TTLCache, cachedmethod
 from collections import defaultdict
 
 import aiohttp
 import requests
 import functools
 from typing import List, Dict, Union
-
-from antelopy import AbiCache
 
 from .transaction import Account, Authorization, Action, Transaction
 from .exceptions import TransactionException, NodeException
@@ -43,6 +41,7 @@ class EosApi:
         self.proxy_service = self._initialize_proxy_service(proxy)
         self.yeomen_proxy_service = self._initialize_proxy_service(yeomen_proxy)
         self.session = self._initialize_session(timeout)
+        self.cache = TTLCache(maxsize=100, ttl=300)
 
     @staticmethod
     def _initialize_proxy_service(proxy: tuple[str, int, int] | None):
@@ -256,6 +255,7 @@ class EosApi:
             self._abi_cache[code] = abi
         return self._abi_cache.get(code)
 
+    @cachedmethod(cache=lambda self: self.cache)
     def get_info(self) -> Dict:
         """
         Retrieve blockchain information.
@@ -266,6 +266,7 @@ class EosApi:
         resp = self._post(url)
         return resp.json()
 
+    @cachedmethod(cache=lambda self: self.cache)
     async def get_info_async(self) -> Dict:
         """
         Asynchronously retrieve blockchain information.
