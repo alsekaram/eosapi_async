@@ -7,7 +7,7 @@ class Proxy:
         self.ip = f"http://{ip}"
         self.port = port
         self.quantity = quantity
-        self.current_index = 0
+        self.current_index = randint(0, self.quantity - 1)
 
     def get_random_proxy(self):
         proxy_number = randint(self.port, self.port + self.quantity)
