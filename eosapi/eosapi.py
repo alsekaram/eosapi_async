@@ -278,15 +278,17 @@ class EosApi:
         resp = self._post(url)
         return resp.json()
 
-    @cachedmethod(cache=lambda self: self.cache)
     async def get_info_async(self) -> Dict:
-        """
-        Asynchronously retrieve blockchain information.
+        cache_key = "get_info"
 
-        :return: A dictionary containing blockchain information.
-        """
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+
         url = self._build_url("get_info")
-        return await self._post_async(url)
+        result = await self._post_async(url)
+
+        self.cache[cache_key] = result
+        return result
 
     def post_transaction(
         self,
@@ -380,10 +382,14 @@ class EosApi:
         actors = []
         actions = []
         for item in trx["actions"]:
-            authorization = [
-                Authorization(actor=auth["actor"], permission=auth["permission"])
-                for auth in item["authorization"]
-            ]
+            authorization = []
+            for auth in item["authorization"]:
+                authorization.append(
+                    Authorization(actor=auth["actor"], permission=auth["permission"])
+                )
+                actor_permission = f"{auth['actor']}-{auth['permission']}"
+                if actor_permission not in actors:
+                    actors.append(actor_permission)
             actions.append(
                 Action(
                     account=item["account"],
@@ -483,8 +489,6 @@ class EosApi:
             for item in extra_signatures:
                 if item not in trx.signatures:
                     trx.signatures.append(item)
-
-        print(f"{trx=}")
 
         return self.post_transaction(trx)
 
