@@ -1,10 +1,10 @@
+import aiohttp
 import json
 from cachetools import TTLCache, cachedmethod
 from collections import defaultdict
-
-import aiohttp
-import requests
 import functools
+import logging
+import requests
 from typing import List, Dict, Union
 
 from .transaction import Account, Authorization, Action, Transaction
@@ -193,14 +193,26 @@ class EosApi:
                 ),
             ) as resp:
                 if resp.status >= 203:
+                    resp_text = await resp.text()
+
                     if resp.status == 500:
+                        try:
+                            res = json.loads(resp_text)
+                        except json.JSONDecodeError:
+                            res = resp_text
                         raise TransactionException(
-                            f"Transaction error:", json.loads(await resp.text())
+                            f"Transaction error: {resp_text}", res
                         )
-                    raise NodeException(
-                        f"EOS node error, bad HTTP status code: {resp.status}",
-                        resp,
-                    )
+
+                    if resp.status == 400:
+                        logging.error(
+                            "OS node error1, bad HTTP status code: %s. text: %s, post_data: %s, req_headers: %s",
+                            resp.status,
+                            resp_text,
+                            post_data,
+                            resp.headers,
+                        ),
+
                 return await resp.json()
 
     def abi_json_to_bin(self, code: str, action: str, args: Dict) -> bytes:
