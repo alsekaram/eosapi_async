@@ -1,5 +1,6 @@
 import requests
 from aiohttp import ClientResponse
+from requests import Response
 
 
 class EosApiException(Exception):
@@ -15,6 +16,6 @@ class NodeException(EosApiException):
 
 
 class TransactionException(EosApiException):
-    def __init__(self, msg, resp: dict | None):
+    def __init__(self, msg, resp: dict | Response | None):
         super().__init__(msg)
         self.resp = resp
