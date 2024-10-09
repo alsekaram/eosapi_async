@@ -1,5 +1,5 @@
 # eosapi
-![version](https://img.shields.io/badge/version-1.2.4-blue)
+![version](https://img.shields.io/badge/version-1.2.5-blue)
 ![license](https://img.shields.io/badge/license-MIT-brightgreen)
 ![python_version](https://img.shields.io/badge/python-%3E%3D%203.7-brightgreen)
 ![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
@@ -15,13 +15,14 @@ eosapi is a python library to interact with EOSIO blockchains.
 its main focus are bot applications on the blockchain.
 
 In Antelope's Leap 3.1, the abi_json_to_bin endpoint was deprecated. 
-In version 1.0.3, I modified the asynchronous abi_json_to_bin method to meet the new requirements.
-In version 1.1.2, I modified the synchronous abi_json_to_bin method to meet the new requirements.
+In version 1.0.3 modified the asynchronous abi_json_to_bin method to meet the new requirements.
+In version 1.1.2 modified the synchronous abi_json_to_bin method to meet the new requirements.
 In version 1.2.1 added proxy support
+In version 1.2.2 added custom headers for playing Alien Worlds
+In version 1.2.5 added cache for get_info and get_info_async
 
 
 
-in 1.1.1 was added custom headers for playing Alien Worlds
 
 # Install
 ```$ pip install eosapi-async```
