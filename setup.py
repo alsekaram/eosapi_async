@@ -2,27 +2,29 @@ import setuptools
 from setuptools import find_packages
 
 
-with open("requirements.txt") as f:
-    requirements = [req for req in f.read().splitlines() if req]
-
 setuptools.setup(
     name="eosapi-async",
-    version="1.2.6",
-    author="encoderlee",
-    author_email="encoderlee@gmail.com",
-    description="a simple, high-level and lightweight eosio sdk write by python with async support",
+    version="2.0.0",  # Major version bump due to significant changes
+    author="alsekaram",
+    author_email="git@awl.su",
+    description="EOS API async client with modern Python support",
     long_description="""
-        Introduced asynchronous versions of `abi_json_to_bin`, `make_transaction`, `get_info` and 
-        `push_transaction` methods using aiohttp. This update enhances performance by allowing 
-        non-blocking HTTP requests, especially useful for high-latency operations.
-        
-        Additional Asynchronous part developed by [alsekaram](https://github.com/alsekaram), you can find him on  
-        GitHub or email [git@awl.su](mailto:git@awl.su).
-        """,
+    Fork of original eosapi with significant improvements:
+
+    - Complete rework of async implementation
+    - Modern Python versions support
+    - Enhanced error handling
+    - Performance optimizations
+    - Updated documentation
+
+    Original code by encoderlee (encoderlee@gmail.com)
+    """,
     long_description_content_type="text/markdown",
     url="https://github.com/alsekaram/eosapi_async",
-    packages=find_packages(),
-    install_requires=requirements,
+    install_requires=[
+        "aiohttp>=3.8.0",
+        "requests>=2.26.0",
+    ],  # Вместо чтения из requirements.txt указываем зависимости прямо здесь
     license="MIT",
     classifiers=[
         "Development Status :: 3 - Alpha",
