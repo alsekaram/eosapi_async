@@ -23,7 +23,7 @@ In version 2.0.0:
 - Cache implementation for get_info and get_info_async
 - Updated RPC host conditions for Alien Worlds platform
 
-In version 2.0.1:
+In version 2.0.2:
 Added new dependencies: cryptos, base58, cachetools, pydantic, and antelopy.
 
 
