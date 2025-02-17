@@ -81,7 +81,7 @@ class EosApi:
             "priority": "u=4",
             "te": "trailers",
         }
-        if "yeomen" in rpc_host:
+        if "alien" in rpc_host:
             self.headers.update(
                 {
                     "referer": "https://play.alienworlds.io/",
