@@ -495,6 +495,7 @@ class EosApi:
     async def push_transaction_async(
         self,
         trx: Union[Dict, Transaction],
+        cpu_usage: int = 1,
         extra_signatures: Union[str, List[str]] = None,
     ) -> Dict:
         """
@@ -505,7 +506,7 @@ class EosApi:
         :return: The result of the transaction.
         """
         if isinstance(trx, dict):
-            trx = await self.make_transaction_async(trx)
+            trx = await self.make_transaction_async(trx, cpu_usage=cpu_usage)
         if extra_signatures:
             if isinstance(extra_signatures, str):
                 extra_signatures = [extra_signatures]
