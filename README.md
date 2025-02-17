@@ -26,6 +26,10 @@ In version 2.0.0:
 In version 2.0.2:
 Added new dependencies: cryptos, base58, cachetools, pydantic, and antelopy.
 
+In version 2.0.3:
+Add `cpu_usage` parameter to `push_transaction_async`
+This change introduces an optional `cpu_usage` parameter to the `push_transaction_async` method, defaulting to 1. 
+It is also passed to the `make_transaction_async` function to allow more control over CPU resource allocation.
 
 
 
