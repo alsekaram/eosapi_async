@@ -1,5 +1,5 @@
 # eosapi
-![version](https://img.shields.io/badge/version-2.0.0-blue)
+![version](https://img.shields.io/badge/version-2.0.1-blue)
 ![license](https://img.shields.io/badge/license-MIT-brightgreen)
 ![python_version](https://img.shields.io/badge/python-%3E%3D%203.12-brightgreen)
 ![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
@@ -22,6 +22,9 @@ In version 2.0.0:
 - Custom headers for Alien Worlds interaction
 - Cache implementation for get_info and get_info_async
 - Updated RPC host conditions for Alien Worlds platform
+
+In version 2.0.1:
+Added new dependencies: cryptos, base58, cachetools, pydantic, and antelopy.
 
 
 
