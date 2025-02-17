@@ -20,6 +20,7 @@ In version 1.1.2 modified the synchronous abi_json_to_bin method to meet the new
 In version 1.2.1 added proxy support
 In version 1.2.2 added custom headers for playing Alien Worlds
 In version 1.2.5 added cache for get_info and get_info_async
+In version 1.2.6 Replace "yeomen" with "alien" in the RPC host condition. This ensures headers are correctly updated when interacting with the Alien Worlds platform.
 
 
 
