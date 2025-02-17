@@ -1,9 +1,8 @@
 # eosapi
-![version](https://img.shields.io/badge/version-1.2.5-blue)
+![version](https://img.shields.io/badge/version-2.0.0-blue)
 ![license](https://img.shields.io/badge/license-MIT-brightgreen)
-![python_version](https://img.shields.io/badge/python-%3E%3D%203.7-brightgreen)
+![python_version](https://img.shields.io/badge/python-%3E%3D%203.12-brightgreen)
 ![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
-[![](https://img.shields.io/badge/blog-@encoderlee-red)](https://encoderlee.blog.csdn.net)
 [![](https://img.shields.io/badge/github-@alsekaram-red)](https://github.com/alsekaram)
 
 A simple, high-level and lightweight eosio sdk write by python
@@ -14,13 +13,15 @@ eosapi is a python library to interact with EOSIO blockchains.
 
 its main focus are bot applications on the blockchain.
 
-In Antelope's Leap 3.1, the abi_json_to_bin endpoint was deprecated. 
-In version 1.0.3 modified the asynchronous abi_json_to_bin method to meet the new requirements.
-In version 1.1.2 modified the synchronous abi_json_to_bin method to meet the new requirements.
-In version 1.2.1 added proxy support
-In version 1.2.2 added custom headers for playing Alien Worlds
-In version 1.2.5 added cache for get_info and get_info_async
-In version 1.2.6 Replace "yeomen" with "alien" in the RPC host condition. This ensures headers are correctly updated when interacting with the Alien Worlds platform.
+In version 2.0.0:
+- Complete rework with modern Python support
+- Enhanced async implementation
+- Performance optimizations and improved error handling
+- Support for Antelope's Leap 3.1 (modified abi_json_to_bin methods)
+- Proxy support functionality
+- Custom headers for Alien Worlds interaction
+- Cache implementation for get_info and get_info_async
+- Updated RPC host conditions for Alien Worlds platform
 
 
 
