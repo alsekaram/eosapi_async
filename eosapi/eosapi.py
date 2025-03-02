@@ -6,25 +6,25 @@ import functools
 import logging
 import requests
 from typing import List, Dict, Union
+import asyncio
 
 from .transaction import Account, Authorization, Action, Transaction
 from .exceptions import TransactionException, NodeException
-
 from .abi import Abi
 from .proxy import Proxy
 
 
 class EosApi:
-    """
-    A class to interact with the EOS blockchain via the EOSIO API.
-    """
+    # Класс-уровневая переменная для хранения сессии
+    _global_aio_session = None
+    _session_lock = asyncio.Lock()
 
     def __init__(
-        self,
-        rpc_host: str = "https://wax.pink.gg",
-        timeout: int = 120,
-        proxy: tuple[str, int, int] | None = None,
-        yeomen_proxy: tuple[str, int, int] | None = None,
+            self,
+            rpc_host: str = "https://wax.pink.gg",
+            timeout: int = 120,
+            proxy: tuple[str, int, int] | None = None,
+            yeomen_proxy: tuple[str, int, int] | None = None,
     ):
         """
         Initialize the EosApi instance.
@@ -42,6 +42,7 @@ class EosApi:
         self.yeomen_proxy_service = self._initialize_proxy_service(yeomen_proxy)
         self.session = self._initialize_session(timeout)
         self.cache = TTLCache(maxsize=100, ttl=300)
+
 
     @staticmethod
     def _initialize_proxy_service(proxy: tuple[str, int, int] | None):
@@ -173,47 +174,52 @@ class EosApi:
 
         return resp
 
-    async def _post_async(self, url: str, post_data: Dict = None) -> Dict:
-        """
-        Asynchronously make a POST request to the given URL.
+    @classmethod
+    async def _get_session(cls, headers):
+        """Получает или создает общую сессию"""
+        async with cls._session_lock:
+            if cls._global_aio_session is None or cls._global_aio_session.closed:
+                cls._global_aio_session = aiohttp.ClientSession(headers=headers)
+            return cls._global_aio_session
 
-        :param url: The URL to post to.
-        :param post_data: The data to post.
-        :return: The response data as a dictionary.
-        """
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
+    async def _post_async(self, url: str, post_data: Dict = None) -> Dict:
+        """Асинхронно выполняет POST-запрос, используя общую сессию"""
+        # Получаем общую сессию
+        session = await self._get_session(self.headers)
+
+        # Используем полученную сессию для запроса
+        async with session.post(
                 url,
                 json=post_data,
                 headers=self.headers,
                 proxy=(
-                    self.yeomen_proxy_service.get_sequential_proxy()
-                    if self.yeomen_proxy_service
-                    else None
+                        self.yeomen_proxy_service.get_sequential_proxy()
+                        if self.yeomen_proxy_service
+                        else None
                 ),
-            ) as resp:
-                if resp.status >= 203:
-                    resp_text = await resp.text()
+        ) as resp:
+            if resp.status >= 203:
+                resp_text = await resp.text()
 
-                    if resp.status == 500:
-                        try:
-                            res = json.loads(resp_text)
-                        except json.JSONDecodeError:
-                            res = resp_text
-                        raise TransactionException(
-                            f"Transaction error: {resp_text}", res
-                        )
+                if resp.status == 500:
+                    try:
+                        res = json.loads(resp_text)
+                    except json.JSONDecodeError:
+                        res = resp_text
+                    raise TransactionException(
+                        f"Transaction error: {resp_text}", res
+                    )
 
-                    if resp.status == 400:
-                        logging.error(
-                            "OS node error1, bad HTTP status code: %s. text: %s, post_data: %s, req_headers: %s",
-                            resp.status,
-                            resp_text,
-                            post_data,
-                            resp.headers,
-                        ),
+                if resp.status == 400:
+                    logging.error(
+                        "OS node error1, bad HTTP status code: %s. text: %s, post_data: %s, req_headers: %s",
+                        resp.status,
+                        resp_text,
+                        post_data,
+                        resp.headers,
+                    ),
 
-                return await resp.json()
+            return await resp.json()
 
     def abi_json_to_bin(self, code: str, action: str, args: Dict) -> bytes:
         """
@@ -411,7 +417,6 @@ class EosApi:
         :return: The created transaction.
         """
         trx, actors = self._prepare_transaction(trx, cpu_usage)
-
         for item in trx.actions:
             binargs = self.abi_json_to_bin(item.account, item.name, item.data)
             item.link(binargs)
@@ -444,7 +449,6 @@ class EosApi:
         :return: The created transaction.
         """
         trx, actors = self._prepare_transaction(trx, cpu_usage)
-
         for item in trx.actions:
             binargs = await self.abi_json_to_bin_async(
                 item.account, item.name, item.data
@@ -452,21 +456,23 @@ class EosApi:
             item.link(binargs)
 
         net_info = await self.get_info_async()
-
         trx.link(net_info["last_irreversible_block_id"], net_info["chain_id"])
 
         signed_keys = []
         for actor_permission in actors:
+
             if actor_permission in self.accounts:
                 private_key = self.accounts[actor_permission].private_key
             elif self.cpu_payer and actor_permission == self.cpu_payer.index():
                 private_key = self.cpu_payer.private_key
             else:
                 continue
-            if private_key not in signed_keys:
-                trx.sign(private_key)
-                signed_keys.append(private_key)
 
+            if private_key not in signed_keys:
+
+                trx.sign(private_key)
+
+                signed_keys.append(private_key)
         return trx
 
     def push_transaction(
@@ -501,6 +507,7 @@ class EosApi:
         """
         Push a transaction to the blockchain.
 
+        :param cpu_usage:
         :param trx: The transaction to push.
         :param extra_signatures: Any extra signatures to add to the transaction.
         :return: The result of the transaction.
