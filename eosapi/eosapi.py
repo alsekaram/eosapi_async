@@ -20,11 +20,11 @@ class EosApi:
     _session_lock = asyncio.Lock()
 
     def __init__(
-            self,
-            rpc_host: str = "https://wax.pink.gg",
-            timeout: int = 120,
-            proxy: tuple[str, int, int] | None = None,
-            yeomen_proxy: tuple[str, int, int] | None = None,
+        self,
+        rpc_host: str = "https://wax.pink.gg",
+        timeout: int = 120,
+        proxy: tuple[str, int, int] | None = None,
+        yeomen_proxy: tuple[str, int, int] | None = None,
     ):
         """
         Initialize the EosApi instance.
@@ -42,7 +42,6 @@ class EosApi:
         self.yeomen_proxy_service = self._initialize_proxy_service(yeomen_proxy)
         self.session = self._initialize_session(timeout)
         self.cache = TTLCache(maxsize=100, ttl=300)
-
 
     @staticmethod
     def _initialize_proxy_service(proxy: tuple[str, int, int] | None):
@@ -189,14 +188,14 @@ class EosApi:
 
         # Используем полученную сессию для запроса
         async with session.post(
-                url,
-                json=post_data,
-                headers=self.headers,
-                proxy=(
-                        self.yeomen_proxy_service.get_sequential_proxy()
-                        if self.yeomen_proxy_service
-                        else None
-                ),
+            url,
+            json=post_data,
+            headers=self.headers,
+            proxy=(
+                self.yeomen_proxy_service.get_sequential_proxy()
+                if self.yeomen_proxy_service
+                else None
+            ),
         ) as resp:
             if resp.status >= 203:
                 resp_text = await resp.text()
@@ -206,9 +205,7 @@ class EosApi:
                         res = json.loads(resp_text)
                     except json.JSONDecodeError:
                         res = resp_text
-                    raise TransactionException(
-                        f"Transaction error: {resp_text}", res
-                    )
+                    raise TransactionException(f"Transaction error: {resp_text}", res)
 
                 if resp.status == 400:
                     logging.error(
