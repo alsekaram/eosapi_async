@@ -93,7 +93,9 @@ class Transaction:
     def link(self, block_id: int, chain_id: int):
         self.chain_id = chain_id
         self.ref_block_num, self.ref_block_prefix = get_tapos_info(block_id)
-        self.expiration = datetime.datetime.utcnow() + datetime.timedelta(seconds=self.expiration_delay_sec)
+        self.expiration = datetime.datetime.utcnow() + datetime.timedelta(
+            seconds=self.expiration_delay_sec
+        )
 
     def pack(self) -> bytes:
         mbytes = b""
@@ -125,7 +127,9 @@ class Transaction:
         sha256.update(mbytes)
         while True:
             v, r, s = ecdsa_raw_sign_nonce(sha256.digest(), private_key, nonce)
-            signature = v.to_bytes(1, "big") + r.to_bytes(32, "big") + s.to_bytes(32, "big")
+            signature = (
+                v.to_bytes(1, "big") + r.to_bytes(32, "big") + s.to_bytes(32, "big")
+            )
             if is_canonical(signature):
                 signature = b"\x00" + signature
                 break
@@ -136,8 +140,8 @@ class Transaction:
     def unpack_signature(self, signature: bytes):
         t = Uint8.unpack(signature)
         if t == 0:
-            data = signature[Uint8.size: Uint8.size + 65]
-            data = data + ripmed160(data + b"K1")[:4]
+            data = signature[Uint8.size : Uint8.size + 65]
+            data = data + ripemd160(data + b"K1")[:4]
             return "SIG_K1_" + b58encode(data).decode("ascii")
         elif t == 1:
             raise EosApiException("not implementd")
