@@ -260,9 +260,9 @@ class RipemdHasher:
     @classmethod
     def _determine_hasher(cls) -> None:
         """
-         Determines the most suitable RIPEMD-160 implementation.
-         Tries to use hashlib first, falls back to Crypto.Hash.RIPEMD160 if not available.
-         """
+        Determines the most suitable RIPEMD-160 implementation.
+        Tries to use hashlib first, falls back to Crypto.Hash.RIPEMD160 if not available.
+        """
         try:
             test_hash = hashlib.new("ripemd160")
             test_hash.update(b"test")
