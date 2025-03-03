@@ -28,7 +28,6 @@ class EosApi:
     ):
         """
         Initialize the EosApi instance.
-
         :param rpc_host: The RPC host URL for the EOSIO API.
         :param timeout: Timeout for the HTTP requests.
         :param proxy: Proxy configuration.
