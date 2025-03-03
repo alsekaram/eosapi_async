@@ -1,10 +1,9 @@
 import setuptools
 from setuptools import find_packages
 
-
 setuptools.setup(
     name="eosapi-async",
-    version="2.1.0",  # Increase from 2.0.3
+    version="2.1.1",
     author="alsekaram",
     author_email="git@awl.su",
     description="EOS API async client with modern Python support",
@@ -16,6 +15,7 @@ setuptools.setup(
     - Enhanced error handling
     - Performance optimizations including shared HTTP session
     - Updated documentation
+    - Fixed RIPEMD160 compatibility issues
 
     Original code by encoderlee (encoderlee@gmail.com)
     """,
@@ -29,7 +29,8 @@ setuptools.setup(
         "cachetools==5.5.1",
         "pydantic==2.10.6",
         "antelopy==0.2.0",
-    ],  # Вместо чтения из requirements.txt указываем зависимости прямо здесь
+        "pycryptodome>=3.18.0",
+    ],
     license="MIT",
     classifiers=[
         "Development Status :: 3 - Alpha",

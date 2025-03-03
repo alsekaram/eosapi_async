@@ -37,6 +37,11 @@ In version 2.1.0:
 - Improved resource usage through TCP/TLS connection reuse
 - Enhanced performance for high-frequency API interactions
 
+In version 2.1.1:
+- Fixed RIPEMD160 compatibility issues by adding support for pycryptodome
+- Improved cross-platform compatibility for cryptographic operations
+- Enhanced error handling for hash algorithms
+
 # Install
 ```$ pip install eosapi-async```
 
