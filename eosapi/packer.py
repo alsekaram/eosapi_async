@@ -1,3 +1,5 @@
+from typing import Callable, Optional, ClassVar
+
 import struct
 import calendar
 import datetime
@@ -5,8 +7,20 @@ from .exceptions import EosApiException
 import re
 from typing import List, Tuple
 import hashlib
-from cryptos import hash_to_int, encode_privkey, decode, encode, \
-    hmac, fast_multiply, G, inv, N, decode_privkey, get_privkey_format
+from Crypto.Hash import RIPEMD160
+from cryptos import (
+    hash_to_int,
+    encode_privkey,
+    decode,
+    encode,
+    hmac,
+    fast_multiply,
+    G,
+    inv,
+    N,
+    decode_privkey,
+    get_privkey_format,
+)
 
 
 class EosType:
@@ -19,7 +33,7 @@ class EosType:
 
     @classmethod
     def unpack(cls, value: bytes) -> int:
-        return struct.unpack(cls.fmt, value[:cls.size])[0]
+        return struct.unpack(cls.fmt, value[: cls.size])[0]
 
     @classmethod
     def pack_array(cls, items: list) -> bytes:
@@ -37,7 +51,7 @@ class EosType:
         for i in range(0, array_len):
             value = cls.unpack(packed_bytes)
             values.append(value)
-            packed_bytes = packed_bytes[cls.size:]
+            packed_bytes = packed_bytes[cls.size :]
         return values
 
 
@@ -178,10 +192,12 @@ def char_to_symbol(c):
 
 def endian_reverse_u32(x):
     x = x & 0xFFFFFFFF
-    return ((x >> 0x18) & 0xFF) \
-        | (((x >> 0x10) & 0xFF) << 0x08) \
-        | (((x >> 0x08) & 0xFF) << 0x10) \
+    return (
+        ((x >> 0x18) & 0xFF)
+        | (((x >> 0x10) & 0xFF) << 0x08)
+        | (((x >> 0x08) & 0xFF) << 0x10)
         | (((x) & 0xFF) << 0x18)
+    )
 
 
 def get_tapos_info(block_id):
@@ -197,13 +213,13 @@ def get_tapos_info(block_id):
 
 
 def deterministic_generate_k_nonce(msghash, priv, nonce):
-    v = b'\x01' * 32
-    k = b'\x00' * 32
-    priv = encode_privkey(priv, 'bin')
+    v = b"\x01" * 32
+    k = b"\x00" * 32
+    priv = encode_privkey(priv, "bin")
     msghash = encode(hash_to_int(msghash) + nonce, 256, 32)
-    k = hmac.new(k, v + b'\x00' + priv + msghash, hashlib.sha256).digest()
+    k = hmac.new(k, v + b"\x00" + priv + msghash, hashlib.sha256).digest()
     v = hmac.new(k, v, hashlib.sha256).digest()
-    k = hmac.new(k, v + b'\x01' + priv + msghash, hashlib.sha256).digest()
+    k = hmac.new(k, v + b"\x01" + priv + msghash, hashlib.sha256).digest()
     v = hmac.new(k, v, hashlib.sha256).digest()
     return decode(hmac.new(k, v, hashlib.sha256).digest(), 256)
 
@@ -216,20 +232,58 @@ def ecdsa_raw_sign_nonce(msghash, priv, nonce):
     s = inv(k, N) * (z + r * decode_privkey(priv)) % N
 
     v, r, s = 27 + ((y % 2) ^ (0 if s * 2 < N else 1)), r, s if s * 2 < N else N - s
-    if 'compressed' in get_privkey_format(priv):
+    if "compressed" in get_privkey_format(priv):
         v += 4
     return v, r, s
 
 
 # like https://github.com/EOSIO/eosjs-ecc/commit/09c823ac4c4fb4f7257d8ed2df45a34215a8c537#diff-e8c843fd1f732a963ec41decb2e69133R241
 def is_canonical(c):
-    return not (c[1] & 0x80) \
-        and not (c[1] == 0 and not (c[2] & 0x80)) \
-        and not (c[33] & 0x80) \
+    return (
+        not (c[1] & 0x80)
+        and not (c[1] == 0 and not (c[2] & 0x80))
+        and not (c[33] & 0x80)
         and not (c[33] == 0 and not (c[34] & 0x80))
+    )
 
 
-def ripmed160(data):
-    h = hashlib.new('ripemd160')
-    h.update(data)
-    return h.digest()
+class RipemdHasher:
+    _hasher: ClassVar[Optional[Callable[[bytes], bytes]]] = None
+
+    @classmethod
+    def hash(cls, data: bytes) -> bytes:
+        if cls._hasher is None:
+            cls._determine_hasher()
+
+        return cls._hasher(data)
+
+    @classmethod
+    def _determine_hasher(cls) -> None:
+        """
+         Determines the most suitable RIPEMD-160 implementation.
+         Tries to use hashlib first, falls back to Crypto.Hash.RIPEMD160 if not available.
+         """
+        try:
+            test_hash = hashlib.new("ripemd160")
+            test_hash.update(b"test")
+            test_hash.digest()
+
+            def hashlib_ripemd(data: bytes) -> bytes:
+                h = hashlib.new("ripemd160")
+                h.update(data)
+                return h.digest()
+
+            cls._hasher = hashlib_ripemd
+
+        except (ValueError, ImportError):
+
+            def crypto_ripemd(data: bytes) -> bytes:
+                h = RIPEMD160.new()
+                h.update(data)
+                return h.digest()
+
+            cls._hasher = crypto_ripemd
+
+
+def ripemd160(data: bytes) -> bytes:
+    return RipemdHasher.hash(data)
