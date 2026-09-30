@@ -202,6 +202,19 @@ class Abi(AbiBaseClass):
             buf += self.serialize_field(field, value)
         return buf
 
+    @staticmethod
+    def _to_bytes(field: AbiStructField, value: Any) -> bytes:
+        """Antelope JSON carries `bytes` as a hex string; antelopy wants bytes."""
+        if isinstance(value, (bytes, bytearray)):
+            return bytes(value)
+        try:
+            return bytes.fromhex(value)
+        except (TypeError, ValueError) as e:
+            raise SerializationError(
+                f"Field {field.name} of type bytes must be a hex string "
+                f"or bytes, got {value!r}"
+            ) from e
+
     def serialize_field(self, field: AbiStructField, value: Any) -> bytes:
         """Serializes a field's data to bytes
 
@@ -268,6 +281,11 @@ class Abi(AbiBaseClass):
                 )
                 return buf + self.serialize_field(new_field, new_value)
             raise SerializationError(f"Field {field.name} couldn't be serialized.")
+        if field.type == "bytes":
+            if field.is_list:
+                value = [self._to_bytes(field, item) for item in value]
+            else:
+                value = self._to_bytes(field, value)
         if field.is_list:
             serializable = ListSerializable(value, field.type)
             return serializable.serialize()

@@ -4,6 +4,7 @@ from cachetools import TTLCache, cachedmethod
 from collections import defaultdict
 import functools
 import ipaddress
+import os
 import requests
 from typing import List, Dict, Union
 from urllib.parse import urlsplit
@@ -14,6 +15,20 @@ from .transaction import Account, Authorization, Action, Transaction
 from .exceptions import EosApiException, TransactionException, NodeException
 from .abi import Abi
 from .proxy import Proxy
+
+# Warnings skip frames in this package, so they point at the caller's code
+_PACKAGE_PREFIX = os.path.dirname(__file__) + os.sep
+
+
+def _warn(message: str, category: type[Warning] = UserWarning):
+    warnings.warn(message, category, skip_file_prefixes=(_PACKAGE_PREFIX,))
+
+
+def _parse_body(text: str) -> Dict | str:
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return text
 
 
 class EosApi:
@@ -94,10 +109,9 @@ class EosApi:
         if parts.scheme not in ("http", "https") or not parts.hostname:
             raise ValueError(f"Invalid rpc_host: {rpc_host!r}")
         if parts.scheme == "http" and not EosApi._is_loopback(parts.hostname):
-            warnings.warn(
+            _warn(
                 f"rpc_host {rpc_host!r} uses plain HTTP: node responses "
-                "can be tampered with in transit, use HTTPS",
-                stacklevel=3,
+                "can be tampered with in transit, use HTTPS"
             )
 
     @staticmethod
@@ -214,12 +228,21 @@ class EosApi:
             proxies={"http": proxy, "https": proxy} if proxy else None,
         )
 
-        if resp.status_code == 500:
-            raise TransactionException(f"Transaction error: {resp.text}", resp)
+        status = resp.status_code
+        if status == 500:
+            raise TransactionException(
+                f"Transaction error: {resp.text}",
+                resp,
+                status=status,
+                body=_parse_body(resp.text),
+            )
 
-        if resp.status_code >= 300 or resp.status_code < 200:
+        if status >= 300 or status < 200:
             raise NodeException(
-                f"EOS node error, bad HTTP status code: {resp.status_code}", resp
+                f"EOS node error, bad HTTP status code: {status}. text: {resp.text}",
+                resp,
+                status=status,
+                body=_parse_body(resp.text),
             )
 
         return resp
@@ -268,11 +291,13 @@ class EosApi:
         ) as resp:
             if resp.status == 500:
                 resp_text = await resp.text()
-                try:
-                    res = json.loads(resp_text)
-                except json.JSONDecodeError:
-                    res = resp_text
-                raise TransactionException(f"Transaction error: {resp_text}", res)
+                body = _parse_body(resp_text)
+                raise TransactionException(
+                    f"Transaction error: {resp_text}",
+                    body,
+                    status=resp.status,
+                    body=body,
+                )
 
             if resp.status >= 300 or resp.status < 200:
                 if self.raise_on_node_error:
@@ -281,15 +306,16 @@ class EosApi:
                         f"EOS node error, bad HTTP status code: {resp.status}. "
                         f"text: {resp_text}",
                         resp,
+                        status=resp.status,
+                        body=_parse_body(resp_text),
                     )
                 if self.raise_on_node_error is None:
-                    warnings.warn(
+                    _warn(
                         f"EOS node returned HTTP {resp.status}: async requests "
                         "return the error body for now, but will raise "
                         "NodeException in 3.0. Pass raise_on_node_error=True "
                         "to opt in now, or False to keep the current behavior.",
                         FutureWarning,
-                        stacklevel=3,
                     )
 
             return await resp.json()
@@ -341,7 +367,9 @@ class EosApi:
         abi = resp_json.get("abi")
         if not abi:
             raise NodeException(
-                f"EOS node error, no ABI for account {code!r}: {resp_json}", None
+                f"EOS node error, no ABI for account {code!r}: {resp_json}",
+                None,
+                body=resp_json,
             )
         return Abi(code, **abi)
 
@@ -501,7 +529,9 @@ class EosApi:
     def _link_to_chain(self, trx: Transaction, net_info: Dict):
         if "chain_id" not in net_info or "last_irreversible_block_id" not in net_info:
             raise NodeException(
-                f"EOS node error, bad get_info response: {net_info}", None
+                f"EOS node error, bad get_info response: {net_info}",
+                None,
+                body=net_info,
             )
         self._check_chain_id(net_info["chain_id"])
         trx.link(net_info["last_irreversible_block_id"], net_info["chain_id"])
@@ -616,11 +646,10 @@ class EosApi:
         """
         # push_transaction takes extra_signatures second: accept that order
         if isinstance(cpu_usage, (str, list)) and extra_signatures is None:
-            warnings.warn(
+            _warn(
                 "signatures passed as the second argument of "
                 "push_transaction_async: pass them as extra_signatures=",
                 FutureWarning,
-                stacklevel=2,
             )
             extra_signatures, cpu_usage = cpu_usage, 1
         if isinstance(trx, dict):
