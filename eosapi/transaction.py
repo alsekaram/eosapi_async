@@ -94,7 +94,8 @@ class Transaction:
     def link(self, block_id: int, chain_id: int):
         self.chain_id = chain_id
         self.ref_block_num, self.ref_block_prefix = get_tapos_info(block_id)
-        self.expiration = datetime.datetime.utcnow() + datetime.timedelta(
+        now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+        self.expiration = now + datetime.timedelta(
             seconds=self.expiration_delay_sec
         )
 
@@ -123,19 +124,8 @@ class Transaction:
         self.signatures.append(signature)
 
     def sign_bytes(self, mbytes: bytes, private_key: str) -> str:
-        nonce = 0
-        sha256 = hashlib.sha256()
-        sha256.update(mbytes)
-        while True:
-            v, r, s = ecdsa_raw_sign_nonce(sha256.digest(), private_key, nonce)
-            signature = (
-                v.to_bytes(1, "big") + r.to_bytes(32, "big") + s.to_bytes(32, "big")
-            )
-            if is_canonical(signature):
-                signature = b"\x00" + signature
-                break
-            nonce += 1
-
+        msghash = hashlib.sha256(mbytes).digest()
+        signature = b"\x00" + ecdsa_sign_canonical(msghash, private_key)
         return self.unpack_signature(signature)
 
     def unpack_signature(self, signature: bytes):

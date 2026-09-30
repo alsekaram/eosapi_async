@@ -17,9 +17,11 @@ from .proxy import Proxy
 
 
 class EosApi:
-    # Класс-уровневая переменная для хранения сессии
-    _global_aio_session = None
-    _session_lock = asyncio.Lock()
+    # One aiohttp session shared by all instances. It is bound to the event
+    # loop it was created in, so a new loop (e.g. a second asyncio.run) gets
+    # a new session instead of failing with "Event loop is closed".
+    _global_aio_session: aiohttp.ClientSession | None = None
+    _global_aio_loop: asyncio.AbstractEventLoop | None = None
 
     def __init__(
         self,
@@ -28,25 +30,38 @@ class EosApi:
         proxy: tuple[str, int, int] | None = None,
         yeomen_proxy: tuple[str, int, int] | None = None,
         expected_chain_id: str | None = None,
+        raise_on_node_error: bool | None = None,
     ):
         """
         Initialize the EosApi instance.
         :param rpc_host: The RPC host URL for the EOSIO API.
         :param timeout: Timeout for the HTTP requests.
-        :param proxy: Proxy configuration.
-        :param yeomen_proxy: Yeomen proxy configuration.
+        :param proxy: Proxy configuration (ip, first port, number of ports),
+            used by both sync and async requests.
+        :param yeomen_proxy: Removed in 2.2.1, passing it raises TypeError.
+            The slot is kept so positional arguments after it don't shift.
         :param expected_chain_id: If set, transactions are signed only when the
             node reports this chain_id.
+        :param raise_on_node_error: How async requests handle a non-2xx,
+            non-500 response. True raises NodeException, like the sync ones.
+            False returns the error body, as before 2.2.0. None (default) returns
+            the error body with a FutureWarning: it will raise in 3.0.
         """
+        if yeomen_proxy is not None:
+            raise TypeError(
+                "yeomen_proxy was removed in 2.2.1: pass proxy instead, "
+                "it now applies to async requests too"
+            )
         self.rpc_host = rpc_host
         self.expected_chain_id = (
             expected_chain_id.lower() if expected_chain_id else None
         )
+        self.raise_on_node_error = raise_on_node_error
+        self.timeout = timeout
         self.accounts: Dict[str, Account] = {}
         self.cpu_payer: Account | None = None
         self._abi_cache: defaultdict[str, Abi] = defaultdict()
         self.proxy_service = self._initialize_proxy_service(proxy)
-        self.yeomen_proxy_service = self._initialize_proxy_service(yeomen_proxy)
         self.session = self._initialize_session(timeout)
         self.cache = TTLCache(maxsize=100, ttl=300)
 
@@ -211,11 +226,32 @@ class EosApi:
 
     @classmethod
     async def _get_session(cls, headers):
-        """Получает или создает общую сессию"""
-        async with cls._session_lock:
-            if cls._global_aio_session is None or cls._global_aio_session.closed:
-                cls._global_aio_session = aiohttp.ClientSession(headers=headers)
-            return cls._global_aio_session
+        """Return the shared session, creating it for the running event loop."""
+        # No await between the check and the assignment, so no lock is needed
+        loop = asyncio.get_running_loop()
+        session = cls._global_aio_session
+        if session is None or session.closed or cls._global_aio_loop is not loop:
+            cls._global_aio_session = aiohttp.ClientSession(headers=headers)
+            cls._global_aio_loop = loop
+        return cls._global_aio_session
+
+    async def close(self):
+        """
+        Close the shared aiohttp session. Call it before the event loop ends,
+        or use ``async with EosApi(...) as api``. A later async request opens
+        a new session.
+        """
+        session = EosApi._global_aio_session
+        if session is not None and not session.closed:
+            await session.close()
+        EosApi._global_aio_session = None
+        EosApi._global_aio_loop = None
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc_info):
+        await self.close()
 
     async def _post_async(self, url: str, post_data: Dict = None) -> Dict:
         """Асинхронно выполняет POST-запрос, используя общую сессию"""
@@ -227,11 +263,8 @@ class EosApi:
             url,
             json=post_data,
             headers=self.headers,
-            proxy=(
-                self.yeomen_proxy_service.get_sequential_proxy()
-                if self.yeomen_proxy_service
-                else None
-            ),
+            proxy=self.proxy_service.get_random_proxy() if self.proxy_service else None,
+            timeout=aiohttp.ClientTimeout(total=self.timeout),
         ) as resp:
             if resp.status == 500:
                 resp_text = await resp.text()
@@ -242,12 +275,22 @@ class EosApi:
                 raise TransactionException(f"Transaction error: {resp_text}", res)
 
             if resp.status >= 300 or resp.status < 200:
-                resp_text = await resp.text()
-                raise NodeException(
-                    f"EOS node error, bad HTTP status code: {resp.status}. "
-                    f"text: {resp_text}",
-                    resp,
-                )
+                if self.raise_on_node_error:
+                    resp_text = await resp.text()
+                    raise NodeException(
+                        f"EOS node error, bad HTTP status code: {resp.status}. "
+                        f"text: {resp_text}",
+                        resp,
+                    )
+                if self.raise_on_node_error is None:
+                    warnings.warn(
+                        f"EOS node returned HTTP {resp.status}: async requests "
+                        "return the error body for now, but will raise "
+                        "NodeException in 3.0. Pass raise_on_node_error=True "
+                        "to opt in now, or False to keep the current behavior.",
+                        FutureWarning,
+                        stacklevel=3,
+                    )
 
             return await resp.json()
 
@@ -290,9 +333,17 @@ class EosApi:
             url = self._build_url("get_abi")
             post_data = {"account_name": code}
             resp_json = self._post(url, post_data).json()
-            abi = Abi(code, **resp_json.get("abi"))
-            self._abi_cache[code] = abi
+            self._abi_cache[code] = self._abi_from_response(code, resp_json)
         return self._abi_cache.get(code)
+
+    @staticmethod
+    def _abi_from_response(code: str, resp_json: Dict) -> Abi:
+        abi = resp_json.get("abi")
+        if not abi:
+            raise NodeException(
+                f"EOS node error, no ABI for account {code!r}: {resp_json}", None
+            )
+        return Abi(code, **abi)
 
     def set_abi(self, code: str, abi: Dict):
         """
@@ -308,8 +359,7 @@ class EosApi:
             url = self._build_url("get_abi")
             post_data = {"account_name": code}
             resp_json = await self._post_async(url, post_data)
-            abi = Abi(code, **resp_json.get("abi"))
-            self._abi_cache[code] = abi
+            self._abi_cache[code] = self._abi_from_response(code, resp_json)
         return self._abi_cache.get(code)
 
     @cachedmethod(cache=lambda self: self.cache)
@@ -332,7 +382,9 @@ class EosApi:
         url = self._build_url("get_info")
         result = await self._post_async(url)
 
-        self.cache[cache_key] = result
+        # an error body (raise_on_node_error=None/False) must not be cached
+        if "chain_id" in result:
+            self.cache[cache_key] = result
         return result
 
     def post_transaction(
@@ -415,20 +467,19 @@ class EosApi:
         :param cpu_usage: The CPU usage for the transaction.
         :return: The prepared transaction.
         """
-        if self.cpu_payer:
-            trx["actions"][0]["authorization"].insert(
-                0,
-                {
-                    "actor": self.cpu_payer.account,
-                    "permission": self.cpu_payer.permission,
-                },
-            )
-
         actors = []
         actions = []
-        for item in trx["actions"]:
+        for index, item in enumerate(trx["actions"]):
+            auths = item["authorization"]
+            if index == 0 and self.cpu_payer:
+                # a new list: the caller's dict may be pushed again
+                payer = {
+                    "actor": self.cpu_payer.account,
+                    "permission": self.cpu_payer.permission,
+                }
+                auths = [payer, *auths]
             authorization = []
-            for auth in item["authorization"]:
+            for auth in auths:
                 authorization.append(
                     Authorization(actor=auth["actor"], permission=auth["permission"])
                 )
@@ -447,6 +498,14 @@ class EosApi:
         trx.max_cpu_usage_ms = cpu_usage
         return trx, actors
 
+    def _link_to_chain(self, trx: Transaction, net_info: Dict):
+        if "chain_id" not in net_info or "last_irreversible_block_id" not in net_info:
+            raise NodeException(
+                f"EOS node error, bad get_info response: {net_info}", None
+            )
+        self._check_chain_id(net_info["chain_id"])
+        trx.link(net_info["last_irreversible_block_id"], net_info["chain_id"])
+
     def make_transaction(self, trx: Dict, cpu_usage: int = 1) -> Transaction:
         """
         Create a transaction.
@@ -460,9 +519,7 @@ class EosApi:
             binargs = self.abi_json_to_bin(item.account, item.name, item.data)
             item.link(binargs)
 
-        net_info = self.get_info()
-        self._check_chain_id(net_info["chain_id"])
-        trx.link(net_info["last_irreversible_block_id"], net_info["chain_id"])
+        self._link_to_chain(trx, self.get_info())
 
         signed_keys = []
         for actor_permission in actors:
@@ -495,9 +552,7 @@ class EosApi:
             )
             item.link(binargs)
 
-        net_info = await self.get_info_async()
-        self._check_chain_id(net_info["chain_id"])
-        trx.link(net_info["last_irreversible_block_id"], net_info["chain_id"])
+        self._link_to_chain(trx, await self.get_info_async())
 
         signed_keys = []
         for actor_permission in actors:
@@ -516,20 +571,8 @@ class EosApi:
                 signed_keys.append(private_key)
         return trx
 
-    def push_transaction(
-        self,
-        trx: Union[Dict, Transaction],
-        extra_signatures: Union[str, List[str]] = None,
-    ) -> Dict:
-        """
-        Push a transaction to the blockchain.
-
-        :param trx: The transaction to push.
-        :param extra_signatures: Any extra signatures to add to the transaction.
-        :return: The result of the transaction.
-        """
-        if isinstance(trx, dict):
-            trx = self.make_transaction(trx)
+    @staticmethod
+    def _add_signatures(trx: Transaction, extra_signatures):
         if extra_signatures:
             if isinstance(extra_signatures, str):
                 extra_signatures = [extra_signatures]
@@ -537,6 +580,24 @@ class EosApi:
                 if item not in trx.signatures:
                     trx.signatures.append(item)
 
+    def push_transaction(
+        self,
+        trx: Union[Dict, Transaction],
+        extra_signatures: Union[str, List[str]] = None,
+        *,
+        cpu_usage: int = 1,
+    ) -> Dict:
+        """
+        Push a transaction to the blockchain.
+
+        :param trx: The transaction to push.
+        :param extra_signatures: Any extra signatures to add to the transaction.
+        :param cpu_usage: The CPU usage for the transaction, if trx is a dict.
+        :return: The result of the transaction.
+        """
+        if isinstance(trx, dict):
+            trx = self.make_transaction(trx, cpu_usage=cpu_usage)
+        self._add_signatures(trx, extra_signatures)
         return self.post_transaction(trx)
 
     async def push_transaction_async(
@@ -548,18 +609,21 @@ class EosApi:
         """
         Push a transaction to the blockchain.
 
-        :param cpu_usage:
         :param trx: The transaction to push.
+        :param cpu_usage: The CPU usage for the transaction, if trx is a dict.
         :param extra_signatures: Any extra signatures to add to the transaction.
         :return: The result of the transaction.
         """
+        # push_transaction takes extra_signatures second: accept that order
+        if isinstance(cpu_usage, (str, list)) and extra_signatures is None:
+            warnings.warn(
+                "signatures passed as the second argument of "
+                "push_transaction_async: pass them as extra_signatures=",
+                FutureWarning,
+                stacklevel=2,
+            )
+            extra_signatures, cpu_usage = cpu_usage, 1
         if isinstance(trx, dict):
             trx = await self.make_transaction_async(trx, cpu_usage=cpu_usage)
-        if extra_signatures:
-            if isinstance(extra_signatures, str):
-                extra_signatures = [extra_signatures]
-            for item in extra_signatures:
-                if item not in trx.signatures:
-                    trx.signatures.append(item)
-
+        self._add_signatures(trx, extra_signatures)
         return await self.post_transaction_async(trx)

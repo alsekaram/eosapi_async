@@ -22,6 +22,11 @@ from cryptos import (
     get_privkey_format,
 )
 
+try:
+    from coincurve import PublicKey as _Secp256k1PublicKey
+except ImportError:  # the optional "fast" extra is not installed: pure Python
+    _Secp256k1PublicKey = None
+
 
 class EosType:
     size: int = None
@@ -77,7 +82,8 @@ class Time(EosType):
     @classmethod
     def unpack(cls, value: bytes) -> datetime.datetime:
         seconds = Uint32.unpack(value)
-        return datetime.datetime.utcfromtimestamp(seconds)
+        utc = datetime.datetime.fromtimestamp(seconds, datetime.UTC)
+        return utc.replace(tzinfo=None)
 
 
 class Name(EosType):
@@ -212,29 +218,67 @@ def get_tapos_info(block_id):
     return ref_block_num, ref_block_prefix
 
 
-def deterministic_generate_k_nonce(msghash, priv, nonce):
+def _decode_signing_key(priv) -> Tuple[int, bytes, bool]:
+    """Parse a private key once: (secret, 32-byte secret, is compressed)."""
+    secret = decode_privkey(priv)
+    compressed = "compressed" in get_privkey_format(priv)
+    return secret, secret.to_bytes(32, "big"), compressed
+
+
+# Built-in int <-> bytes below: cryptos' encode/decode/inv are pure Python
+# and were most of the signing time once k·G moved to C.
+def _generate_k(z: int, secret_bin: bytes, nonce: int) -> int:
     v = b"\x01" * 32
     k = b"\x00" * 32
-    priv = encode_privkey(priv, "bin")
-    msghash = encode(hash_to_int(msghash) + nonce, 256, 32)
-    k = hmac.new(k, v + b"\x00" + priv + msghash, hashlib.sha256).digest()
+    zn = z + nonce
+    msghash = zn.to_bytes(max(32, (zn.bit_length() + 7) // 8), "big")
+    k = hmac.new(k, v + b"\x00" + secret_bin + msghash, hashlib.sha256).digest()
     v = hmac.new(k, v, hashlib.sha256).digest()
-    k = hmac.new(k, v + b"\x01" + priv + msghash, hashlib.sha256).digest()
+    k = hmac.new(k, v + b"\x01" + secret_bin + msghash, hashlib.sha256).digest()
     v = hmac.new(k, v, hashlib.sha256).digest()
-    return decode(hmac.new(k, v, hashlib.sha256).digest(), 256)
+    return int.from_bytes(hmac.new(k, v, hashlib.sha256).digest(), "big")
+
+
+def deterministic_generate_k_nonce(msghash, priv, nonce):
+    return _generate_k(hash_to_int(msghash), encode_privkey(priv, "bin"), nonce)
+
+
+def _multiply_g(k: int) -> Tuple[int, int]:
+    """k·G on secp256k1: in C via libsecp256k1 when coincurve is installed."""
+    if _Secp256k1PublicKey is None:
+        return fast_multiply(G, k)
+    return _Secp256k1PublicKey.from_secret((k % N).to_bytes(32, "big")).point()
+
+
+def _sign(z: int, key: Tuple[int, bytes, bool], nonce: int):
+    secret, secret_bin, compressed = key
+    k = _generate_k(z, secret_bin, nonce)
+
+    r, y = _multiply_g(k)
+    s = pow(k, -1, N) * (z + r * secret) % N
+
+    v, r, s = 27 + ((y % 2) ^ (0 if s * 2 < N else 1)), r, s if s * 2 < N else N - s
+    if compressed:
+        v += 4
+    return v, r, s
 
 
 def ecdsa_raw_sign_nonce(msghash, priv, nonce):
-    z = hash_to_int(msghash)
-    k = deterministic_generate_k_nonce(msghash, priv, nonce)
+    return _sign(hash_to_int(msghash), _decode_signing_key(priv), nonce)
 
-    r, y = fast_multiply(G, k)
-    s = inv(k, N) * (z + r * decode_privkey(priv)) % N
 
-    v, r, s = 27 + ((y % 2) ^ (0 if s * 2 < N else 1)), r, s if s * 2 < N else N - s
-    if "compressed" in get_privkey_format(priv):
-        v += 4
-    return v, r, s
+def ecdsa_sign_canonical(msghash: bytes, priv) -> bytes:
+    """Sign a 32-byte digest as v || r || s, retrying with the next nonce
+    until the signature is canonical, as EOS requires."""
+    z = int.from_bytes(msghash, "big")
+    key = _decode_signing_key(priv)
+    nonce = 0
+    while True:
+        v, r, s = _sign(z, key, nonce)
+        signature = v.to_bytes(1, "big") + r.to_bytes(32, "big") + s.to_bytes(32, "big")
+        if is_canonical(signature):
+            return signature
+        nonce += 1
 
 
 # like https://github.com/EOSIO/eosjs-ecc/commit/09c823ac4c4fb4f7257d8ed2df45a34215a8c537#diff-e8c843fd1f732a963ec41decb2e69133R241
