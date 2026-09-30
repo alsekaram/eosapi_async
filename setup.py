@@ -3,7 +3,7 @@ from setuptools import find_packages
 
 setuptools.setup(
     name="eosapi-async",
-    version="2.1.1",
+    version="2.2.0",
     author="alsekaram",
     author_email="git@awl.su",
     description="EOS API async client with modern Python support",
@@ -22,14 +22,14 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/alsekaram/eosapi_async",
     install_requires=[
-        "aiohttp>=3.8.0",
-        "requests>=2.26.0",
+        "aiohttp>=3.12.14",
+        "requests>=2.32.4",
         "cryptos==2.0.9",
         "base58==2.1.1",
         "cachetools==5.5.1",
         "pydantic==2.10.6",
         "antelopy==0.2.0",
-        "pycryptodome>=3.18.0",
+        "pycryptodome>=3.19.1",
     ],
     license="MIT",
     classifiers=[
