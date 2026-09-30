@@ -192,3 +192,62 @@ def test_async_push_accepts_signatures_as_second_argument(api, servers):
 def test_async_push_cpu_usage_positional(api, servers):
     arun(api, lambda: api.push_transaction_async(transfer_trx(), 7))
     assert packed_cpu_usage(pushed(servers)[0]) == 7
+
+
+# exception details and warning locations
+
+
+def test_node_exception_has_status_and_body(api, servers):
+    servers.reply("get_info", {"error": "rate limited"}, status=429)
+    with pytest.raises(NodeException) as sync_exc:
+        api.get_info()
+    api.raise_on_node_error = True
+    with pytest.raises(NodeException) as async_exc:
+        arun(api, api.get_info_async)
+    for exc in (sync_exc.value, async_exc.value):
+        assert exc.status == 429
+        assert exc.body == {"error": "rate limited"}
+
+
+def test_transaction_exception_has_status_and_body(api, servers):
+    servers.reply("push_transaction", {"error": {"what": "expired"}}, status=500)
+    with pytest.raises(TransactionException) as sync_exc:
+        api.push_transaction(transfer_trx())
+    with pytest.raises(TransactionException) as async_exc:
+        arun(api, lambda: api.push_transaction_async(transfer_trx()))
+    for exc in (sync_exc.value, async_exc.value):
+        assert exc.status == 500
+        assert exc.body == {"error": {"what": "expired"}}
+
+
+def test_node_exception_body_for_missing_abi(servers):
+    api = EosApi(rpc_host=servers.node_url)
+    servers.reply("get_abi", {"account_name": "nocontract"})
+    with pytest.raises(NodeException) as exc_info:
+        api.abi_json_to_bin("nocontract", "transfer", {})
+    assert exc_info.value.body == {"account_name": "nocontract"}
+
+
+def test_warnings_point_at_caller(api, servers):
+    with pytest.warns(UserWarning, match="plain HTTP") as caught:
+        EosApi(rpc_host="http://wax.greymass.com")
+    assert caught[0].filename == __file__
+
+    # the awaiting coroutine lives in this file, so the warning points here
+    async def get_info():
+        async with api:
+            return await api.get_info_async()
+
+    async def push_with_signature_second():
+        async with api:
+            return await api.push_transaction_async(transfer_trx(), "SIG_K1_x")
+
+    servers.reply("get_info", {"error": "bad"}, status=400)
+    with pytest.warns(FutureWarning, match="raise NodeException in 3.0") as caught:
+        asyncio.run(get_info())
+    assert caught[0].filename == __file__
+
+    servers.reset()
+    with pytest.warns(FutureWarning, match="extra_signatures=") as caught:
+        asyncio.run(push_with_signature_second())
+    assert caught[0].filename == __file__

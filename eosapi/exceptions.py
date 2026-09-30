@@ -9,12 +9,29 @@ class EosApiException(Exception):
 
 
 class NodeException(EosApiException):
-    def __init__(self, msg: str, resp: requests.Response | ClientResponse | None):
+    def __init__(
+        self,
+        msg: str,
+        resp: requests.Response | ClientResponse | None,
+        status: int | None = None,
+        body: dict | str | None = None,
+    ):
         super().__init__(msg)
         self.resp = resp
+        # an aiohttp response is closed by now: status and body stay readable
+        self.status = status
+        self.body = body
 
 
 class TransactionException(EosApiException):
-    def __init__(self, msg, resp: dict | Response | None):
+    def __init__(
+        self,
+        msg,
+        resp: dict | Response | None,
+        status: int | None = None,
+        body: dict | str | None = None,
+    ):
         super().__init__(msg)
         self.resp = resp
+        self.status = status
+        self.body = body

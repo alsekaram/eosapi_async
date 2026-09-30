@@ -1,5 +1,5 @@
 # eosapi
-![version](https://img.shields.io/badge/version-2.2.1-blue)
+![version](https://img.shields.io/badge/version-2.2.2-blue)
 ![license](https://img.shields.io/badge/license-MIT-brightgreen)
 ![python_version](https://img.shields.io/badge/python-%3E%3D%203.12-brightgreen)
 [![](https://img.shields.io/badge/github-@alsekaram-red)](https://github.com/alsekaram)
@@ -64,6 +64,11 @@ In version 2.2.1:
 - No more `DeprecationWarning` from `datetime.utcnow()` on Python 3.12+
 - Dependencies are version ranges instead of exact pins (`pydantic`, `cachetools` and others no longer conflict with your project's versions); `python_requires=">=3.12"` is declared
 - Added a test suite: `pip install -e .[test]` and `pytest`
+
+In version 2.2.2:
+- Fields of ABI type `bytes` (e.g. `nonce` in `m.federation::mine`) accept a hex string, as in Antelope JSON and on the node. Before, the serializer failed with `TypeError: can't concat str to bytes`. `bytes` values still work, and an invalid hex string raises `SerializationError` naming the field
+- `NodeException` and `TransactionException` have `status` (HTTP status) and `body` (parsed JSON or text). In async code `e.resp` is an aiohttp response that is already closed, so its body can't be read; `e.body` can
+- Warnings from the library (plain HTTP `rpc_host`, `FutureWarning`s) point at the line in your code, not inside the library
 
 # Install
 ```$ pip install eosapi-async```
