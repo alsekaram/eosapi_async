@@ -10,7 +10,7 @@ class Proxy:
         self.current_index = randint(0, self.quantity - 1)
 
     def get_random_proxy(self):
-        proxy_number = randint(self.port, self.port + self.quantity)
+        proxy_number = randint(self.port, self.port + self.quantity - 1)
         proxy = f"{self.ip}:{proxy_number}"
         return proxy
 

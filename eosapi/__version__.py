@@ -7,4 +7,4 @@ __author__ = "alsekaram"
 __author_email__ = "git@awl.su"
 __license__ = "MIT"
 
-__version__ = "2.1.1"
+__version__ = "2.2.0"

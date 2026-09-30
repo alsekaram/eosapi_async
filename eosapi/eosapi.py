@@ -3,13 +3,15 @@ import json
 from cachetools import TTLCache, cachedmethod
 from collections import defaultdict
 import functools
-import logging
+import ipaddress
 import requests
 from typing import List, Dict, Union
+from urllib.parse import urlsplit
 import asyncio
+import warnings
 
 from .transaction import Account, Authorization, Action, Transaction
-from .exceptions import TransactionException, NodeException
+from .exceptions import EosApiException, TransactionException, NodeException
 from .abi import Abi
 from .proxy import Proxy
 
@@ -25,6 +27,7 @@ class EosApi:
         timeout: int = 120,
         proxy: tuple[str, int, int] | None = None,
         yeomen_proxy: tuple[str, int, int] | None = None,
+        expected_chain_id: str | None = None,
     ):
         """
         Initialize the EosApi instance.
@@ -32,8 +35,13 @@ class EosApi:
         :param timeout: Timeout for the HTTP requests.
         :param proxy: Proxy configuration.
         :param yeomen_proxy: Yeomen proxy configuration.
+        :param expected_chain_id: If set, transactions are signed only when the
+            node reports this chain_id.
         """
         self.rpc_host = rpc_host
+        self.expected_chain_id = (
+            expected_chain_id.lower() if expected_chain_id else None
+        )
         self.accounts: Dict[str, Account] = {}
         self.cpu_payer: Account | None = None
         self._abi_cache: defaultdict[str, Abi] = defaultdict()
@@ -61,8 +69,37 @@ class EosApi:
 
     @rpc_host.setter
     def rpc_host(self, rpc_host: str):
+        self._validate_rpc_host(rpc_host)
         self._update_headers(rpc_host)
         self._rpc_host = rpc_host
+
+    @staticmethod
+    def _validate_rpc_host(rpc_host: str):
+        parts = urlsplit(rpc_host)
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            raise ValueError(f"Invalid rpc_host: {rpc_host!r}")
+        if parts.scheme == "http" and not EosApi._is_loopback(parts.hostname):
+            warnings.warn(
+                f"rpc_host {rpc_host!r} uses plain HTTP: node responses "
+                "can be tampered with in transit, use HTTPS",
+                stacklevel=3,
+            )
+
+    @staticmethod
+    def _is_loopback(hostname: str) -> bool:
+        if hostname == "localhost":
+            return True
+        try:
+            return ipaddress.ip_address(hostname).is_loopback
+        except ValueError:
+            return False
+
+    def _check_chain_id(self, chain_id: str):
+        if self.expected_chain_id and chain_id.lower() != self.expected_chain_id:
+            raise EosApiException(
+                f"chain_id mismatch: node reports {chain_id}, "
+                f"expected {self.expected_chain_id}"
+            )
 
     def _update_headers(self, rpc_host: str):
         self.headers = {
@@ -153,13 +190,13 @@ class EosApi:
         :param post_data: The data to post.
         :return: The response from the request.
         """
+        # requests expects a scheme -> proxy mapping; a bare string is ignored
+        proxy = self.proxy_service.get_random_proxy() if self.proxy_service else None
         resp = self.session.post(
             url,
             json=post_data,
             headers=self.headers,
-            proxies=(
-                self.proxy_service.get_random_proxy() if self.proxy_service else None
-            ),
+            proxies={"http": proxy, "https": proxy} if proxy else None,
         )
 
         if resp.status_code == 500:
@@ -196,24 +233,21 @@ class EosApi:
                 else None
             ),
         ) as resp:
-            if resp.status >= 203:
+            if resp.status == 500:
                 resp_text = await resp.text()
+                try:
+                    res = json.loads(resp_text)
+                except json.JSONDecodeError:
+                    res = resp_text
+                raise TransactionException(f"Transaction error: {resp_text}", res)
 
-                if resp.status == 500:
-                    try:
-                        res = json.loads(resp_text)
-                    except json.JSONDecodeError:
-                        res = resp_text
-                    raise TransactionException(f"Transaction error: {resp_text}", res)
-
-                if resp.status == 400:
-                    logging.error(
-                        "OS node error1, bad HTTP status code: %s. text: %s, post_data: %s, req_headers: %s",
-                        resp.status,
-                        resp_text,
-                        post_data,
-                        resp.headers,
-                    ),
+            if resp.status >= 300 or resp.status < 200:
+                resp_text = await resp.text()
+                raise NodeException(
+                    f"EOS node error, bad HTTP status code: {resp.status}. "
+                    f"text: {resp_text}",
+                    resp,
+                )
 
             return await resp.json()
 
@@ -259,6 +293,15 @@ class EosApi:
             abi = Abi(code, **resp_json.get("abi"))
             self._abi_cache[code] = abi
         return self._abi_cache.get(code)
+
+    def set_abi(self, code: str, abi: Dict):
+        """
+        Use a trusted ABI for a contract instead of fetching it from the node.
+
+        :param code: The contract account name.
+        :param abi: The ABI dict (the "abi" field of a get_abi response).
+        """
+        self._abi_cache[code] = Abi(code, **abi)
 
     async def _get_or_fetch_abi_async(self, code: str):
         if self._abi_cache.get(code) is None:
@@ -418,6 +461,7 @@ class EosApi:
             item.link(binargs)
 
         net_info = self.get_info()
+        self._check_chain_id(net_info["chain_id"])
         trx.link(net_info["last_irreversible_block_id"], net_info["chain_id"])
 
         signed_keys = []
@@ -452,6 +496,7 @@ class EosApi:
             item.link(binargs)
 
         net_info = await self.get_info_async()
+        self._check_chain_id(net_info["chain_id"])
         trx.link(net_info["last_irreversible_block_id"], net_info["chain_id"])
 
         signed_keys = []

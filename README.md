@@ -1,5 +1,5 @@
 # eosapi
-![version](https://img.shields.io/badge/version-2.1.0-blue)
+![version](https://img.shields.io/badge/version-2.2.0-blue)
 ![license](https://img.shields.io/badge/license-MIT-brightgreen)
 ![python_version](https://img.shields.io/badge/python-%3E%3D%203.12-brightgreen)
 ![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
@@ -42,6 +42,15 @@ In version 2.1.1:
 - Improved cross-platform compatibility for cryptographic operations
 - Enhanced error handling for hash algorithms
 
+In version 2.2.0 (security fixes):
+- The sync client now really uses the configured proxy (it was silently bypassed before, exposing the real IP)
+- New `expected_chain_id` parameter: transactions are signed only if the node reports this chain id
+- New `set_abi(code, abi)` method to use a trusted local ABI instead of the one served by the node
+- `rpc_host` must be an `http(s)` URL; plain HTTP to a non-local host emits a warning
+- Private keys are no longer shown in `repr(Account)`
+- Async requests now raise `NodeException` on any non-2xx response (like the sync ones) instead of returning the error body; request data is no longer logged
+- Raised minimum versions: `aiohttp>=3.12.14`, `requests>=2.32.4`, `pycryptodome>=3.19.1`
+
 # Install
 ```$ pip install eosapi-async```
 
@@ -57,7 +66,10 @@ private_key = "you_key"
 
 async def main() -> None:
 
-    wax_api = EosApi()
+    # WAX mainnet chain id: refuse to sign for any other chain
+    wax_api = EosApi(
+        expected_chain_id="1064487b3cd1a897ce03ae5b6a865651747e2e152090f99c1d19d44e01aea5a4"
+    )
     wax_api.import_key(account_name, private_key)
 
     print(await wax_api.get_info_async())

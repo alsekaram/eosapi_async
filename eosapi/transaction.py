@@ -9,7 +9,8 @@ import json
 @dataclass
 class Account:
     account: str
-    private_key: str
+    # repr=False keeps the key out of logs and tracebacks
+    private_key: str = field(repr=False)
     permission: str = "active"
 
     def index(self):
